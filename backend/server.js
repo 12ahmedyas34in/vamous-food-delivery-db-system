@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { sequelize, connectDB } = require('./config/db');
+const logger        = require('./config/logger');
+const requestLogger = require('./middleware/requestLogger');
 
 // 1. IMPORT ROUTES
 const authRoutes = require('./routes/authRoutes');
@@ -14,6 +16,7 @@ const driverRoutes = require('./routes/driverRoutes');
 
 const app = express();
 
+app.use(requestLogger);   // Must be the first middleware
 app.use(cors());
 app.use(express.json());
 
@@ -38,8 +41,16 @@ app.get('/api/health', async (req, res) => {
 
 // Error Handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something broke!' });
+  logger.error({
+    err,
+    path:   req.originalUrl,
+    method: req.method,
+  }, err.message);
+
+  res.status(500).json({
+    status:  'fail',
+    message: 'An unexpected error occurred. Please try again.',
+  });
 });
 
 const PORT = process.env.PORT || 5000;
@@ -47,7 +58,10 @@ const startServer = async () => {
   await connectDB();
 
   app.listen(PORT, () => {
-    console.log(`Express server running on port ${PORT}`);
+    logger.info({
+      port: PORT,
+      env:  process.env.NODE_ENV ?? 'development',
+    }, 'SaporiVivi backend running');
   });
 };
 startServer();
