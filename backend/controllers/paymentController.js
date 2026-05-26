@@ -1,120 +1,115 @@
-const { Order, Payment, OrderStatusHistory, sequelize } = require('../models');
+const { Order, Payment, PaymentMethod, OrderStatusHistory, sequelize } = require('../models');
+const { canTransition }                  = require('../services/orderStateMachine');
+const { successResponse, errorResponse } = require('../utils/response');
+const logger                             = require('../config/logger');
 
-// 1. POST /api/payments/create-intent
-exports.createPaymentIntent = async (req, res) => {
-  try {
-    const { order_id } = req.body;
-
-    if (!order_id || isNaN(order_id)) {
-      return res.status(400).json({ status: 'fail', message: 'Invalid or missing order_id' });
-    }
-
-    // Verify order exists, belongs to user, and is PENDING
-    const order = await Order.findOne({
-      where: { id: order_id, user_id: req.user.id, status: 'PENDING' }
-    });
-
-    if (!order) {
-      return res.status(404).json({ status: 'fail', message: 'Valid pending order not found' });
-    }
-
-    // Verify no payment is currently processing or already completed
-    const activePayment = await Payment.findOne({
-      where: {
-        order_id,
-        status: ['pending', 'completed']
-      }
-    });
-
-    if (activePayment) {
-      return res.status(400).json({ status: 'fail', message: 'A payment is already pending or completed for this order' });
-    }
-
-    // Create a new pending payment
-    const payment = await Payment.create({
-      order_id: order.id,
-      amount: order.total_price,
-      status: 'pending',
-      payment_method: 'simulated'
-    });
-
-    res.status(200).json({
-      status: 'success',
-      clientSecret: 'mock_secret_for_demo_purposes_only',
-      payment_id: payment.id
-    });
-  } catch (error) {
-    res.status(500).json({ status: 'fail', message: error.message });
-  }
+const recordHistory = async (orderId, status, actorUserId, notes, transaction) => {
+  await OrderStatusHistory.create(
+    { order_id: orderId, status_name: status, actor_user_id: actorUserId, notes },
+    { transaction }
+  );
 };
 
-// 2. POST /api/payments/simulate/:orderId
-exports.simulatePayment = async (req, res) => {
+// POST /api/payments/simulate/:orderId  — dev/test only
+exports.simulatePayment = async (req, res, next) => {
   const t = await sequelize.transaction();
-
   try {
-    const { orderId } = req.params;
-    const { status } = req.body; // Webhook will send 'completed' or 'failed'
-
-    // DB ROW LOCK: Prevents two webhook calls from hitting this exact row at the same millisecond
-    const order = await Order.findOne({
-      where: { id: orderId, user_id: req.user.id },
-      transaction: t,
-      lock: t.LOCK.UPDATE
-    });
+    const order = await Order.findByPk(req.params.orderId, { lock: t.LOCK.UPDATE, transaction: t });
 
     if (!order) {
       await t.rollback();
-      return res.status(404).json({ status: 'fail', message: 'Order not found or not yours' });
+      return errorResponse(res, 'Order not found', 404);
     }
 
-    // Idempotency: If Stripe hits us twice but it's already confirmed, just smile and return success
-    if (order.status === 'CONFIRMED') {
+    if (!canTransition(order.status, 'PAID')) {
       await t.rollback();
-      return res.status(200).json({ status: 'success', message: 'Order is already confirmed' });
+      return errorResponse(res, `Cannot simulate payment: order is ${order.status}, expected PENDING_PAYMENT`, 400);
     }
 
-    if (order.status !== 'PENDING') {
-      await t.rollback();
-      return res.status(400).json({ status: 'fail', message: `Cannot pay for order in ${order.status} state` });
-    }
-
-    // DB ROW LOCK on the Payment row
-    const payment = await Payment.findOne({
-      where: { order_id: orderId, status: 'pending' },
-      transaction: t,
-      lock: t.LOCK.UPDATE
-    });
+    const payment = await Payment.findOne({ where: { order_id: order.id }, lock: t.LOCK.UPDATE, transaction: t });
 
     if (!payment) {
       await t.rollback();
-      return res.status(400).json({ status: 'fail', message: 'No pending payment found. Create intent first.' });
+      return errorResponse(res, 'Payment record not found', 404);
     }
 
-    // Handle a failed credit card charge
-    if (status === 'failed') {
-      payment.status = 'failed';
-      await payment.save({ transaction: t });
-      await t.commit();
-      return res.status(400).json({ status: 'fail', message: 'Payment failed. Please try again.' });
+    if (payment.status === 'completed') {
+      await t.rollback();
+      return errorResponse(res, 'Payment already completed', 409);
     }
 
-    // Handle a successful charge
-    payment.status = 'completed';
-    await payment.save({ transaction: t });
-
-    order.status = 'CONFIRMED';
-    await order.save({ transaction: t });
-
-    await OrderStatusHistory.create({
-      order_id: order.id,
-      status: 'CONFIRMED'
-    }, { transaction: t });
-
+    await payment.update(
+      { status: 'completed', paid_at: new Date(), transaction_id: `SIM-${Date.now()}` },
+      { transaction: t }
+    );
+    await order.update({ status: 'PAID' }, { transaction: t });
+    await recordHistory(order.id, 'PAID', req.user.id, 'Payment simulated (dev/test)', t);
     await t.commit();
-    res.status(200).json({ status: 'success', message: 'Payment successful, order CONFIRMED', order });
-  } catch (error) {
+
+    logger.info({ orderId: order.id, userId: req.user.id }, 'Payment simulated — order advanced to PAID');
+
+    return successResponse(
+      res,
+      { orderId: order.id, orderStatus: 'PAID', paymentStatus: 'completed' },
+      'Payment simulated. Order is now PAID.'
+    );
+  } catch (err) {
     await t.rollback();
-    res.status(500).json({ status: 'fail', message: error.message });
+    next(err);
+  }
+};
+
+// POST /api/payments/confirm-transfer/:orderId  — admin only
+exports.confirmTransfer = async (req, res, next) => {
+  const t = await sequelize.transaction();
+  try {
+    const order = await Order.findByPk(req.params.orderId, { lock: t.LOCK.UPDATE, transaction: t });
+
+    if (!order) {
+      await t.rollback();
+      return errorResponse(res, 'Order not found', 404);
+    }
+
+    if (!canTransition(order.status, 'PAID')) {
+      await t.rollback();
+      return errorResponse(res, `Cannot confirm payment: order is ${order.status}, expected PENDING_PAYMENT`, 400);
+    }
+
+    const payment = await Payment.findOne({ where: { order_id: order.id }, lock: t.LOCK.UPDATE, transaction: t });
+
+    if (!payment) {
+      await t.rollback();
+      return errorResponse(res, 'Payment record not found', 404);
+    }
+
+    if (payment.status === 'completed') {
+      await t.rollback();
+      return errorResponse(res, 'Payment already confirmed', 409);
+    }
+
+    await payment.update(
+      { status: 'completed', paid_at: new Date(), transaction_id: req.body.transaction_reference ?? null },
+      { transaction: t }
+    );
+    await order.update({ status: 'PAID' }, { transaction: t });
+    await recordHistory(order.id, 'PAID', req.user.id, `Manual transfer confirmed by admin ${req.user.id}`, t);
+    await t.commit();
+
+    logger.info({ orderId: order.id, adminId: req.user.id }, 'Bank transfer confirmed — order advanced to PAID');
+
+    return successResponse(res, { orderId: order.id, orderStatus: 'PAID' }, 'Transfer confirmed. Order is now PAID.');
+  } catch (err) {
+    await t.rollback();
+    next(err);
+  }
+};
+
+// GET /api/payment-methods
+exports.getPaymentMethods = async (req, res, next) => {
+  try {
+    const methods = await PaymentMethod.findAll({ order: [['id', 'ASC']] });
+    return successResponse(res, methods, 'Payment methods retrieved');
+  } catch (err) {
+    next(err);
   }
 };
