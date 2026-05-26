@@ -1,53 +1,56 @@
 const express = require('express');
-const cors = require('cors');
+const cors    = require('cors');
 require('dotenv').config();
-const { sequelize, connectDB } = require('./config/db');
 
-// 1. IMPORT ROUTES
-const authRoutes = require('./routes/authRoutes');
+const { sequelize, connectDB } = require('./config/db');
+const logger        = require('./config/logger');
+const requestLogger = require('./middleware/requestLogger');
+
+const authRoutes       = require('./routes/authRoutes');
 const restaurantRoutes = require('./routes/restaurantRoutes');
-const menuRoutes = require('./routes/menuRoutes');
-const cartRoutes = require('./routes/cartRoutes');
-const orderRoutes = require('./routes/orderRoutes');
-const paymentRoutes = require('./routes/paymentRoutes');
-const driverRoutes = require('./routes/driverRoutes');
+const menuRoutes       = require('./routes/menuRoutes');
+const cartRoutes       = require('./routes/cartRoutes');
+const orderRoutes      = require('./routes/orderRoutes');
+const paymentRoutes    = require('./routes/paymentRoutes');
+const driverRoutes     = require('./routes/driverRoutes');
+const addressRoutes    = require('./routes/addressRoutes');
 
 const app = express();
 
+app.use(requestLogger);
 app.use(cors());
 app.use(express.json());
 
-// 2. MOUNT ROUTES
-app.use('/api/auth', authRoutes);
+app.use('/api/auth',        authRoutes);
 app.use('/api/restaurants', restaurantRoutes);
-app.use('/api/menu-items', menuRoutes);
-app.use('/api/cart', cartRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/drivers', driverRoutes);
+app.use('/api/menu-items',  menuRoutes);
+app.use('/api/cart',        cartRoutes);
+app.use('/api/orders',      orderRoutes);
+app.use('/api/payments',    paymentRoutes);
+app.use('/api/drivers',     driverRoutes);
+app.use('/api/addresses',   addressRoutes);
 
-// REAL Health Check
 app.get('/api/health', async (req, res) => {
   try {
     await sequelize.authenticate();
-    res.status(200).json({ status: "OK", db: "connected" });
+    res.status(200).json({ status: 'OK', db: 'connected' });
   } catch (error) {
-    res.status(500).json({ status: "ERROR", db: "disconnected" });
+    res.status(500).json({ status: 'ERROR', db: 'disconnected' });
   }
 });
 
-// Error Handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something broke!' });
+  logger.error({ err, path: req.originalUrl, method: req.method }, err.message);
+  res.status(500).json({ status: 'error', message: 'An unexpected error occurred. Please try again.' });
 });
 
 const PORT = process.env.PORT || 5000;
+
 const startServer = async () => {
   await connectDB();
-
   app.listen(PORT, () => {
-    console.log(`Express server running on port ${PORT}`);
+    logger.info({ port: PORT, env: process.env.NODE_ENV ?? 'development' }, 'SaporiVivi backend running');
   });
 };
+
 startServer();
