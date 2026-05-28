@@ -1,19 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import axios from '../api/axios';
 
-// In a real app, this comes from a /checkout-preview API.
 const DELIVERY_FEE = 30.00;
 
 const Cart = () => {
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [processingId, setProcessingId] = useState(null); // Per-item locking
-
   const [error, setError] = useState('');
-  const [address, setAddress] = useState('');
+  
+  // Priority 2: Address state
+  const [addresses, setAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState('');
+  const [addressesLoading, setAddressesLoading] = useState(true);
+  const [addressError, setAddressError] = useState('');
+
   const navigate = useNavigate();
 
   const fetchCart = async () => {
@@ -27,8 +30,31 @@ const Cart = () => {
     }
   };
 
+  // Priority 2: Fetch user addresses
+  const fetchAddresses = async () => {
+    try {
+      setAddressesLoading(true);
+      const response = await axios.get('/addresses');
+      const addressList = response.data.data || [];
+      setAddresses(addressList);
+      
+      // Auto-select default address if exists
+      const defaultAddr = addressList.find(addr => addr.is_default);
+      if (defaultAddr) {
+        setSelectedAddressId(defaultAddr.id);
+      }
+      setAddressError('');
+    } catch (err) {
+      console.error('Failed to fetch addresses:', err);
+      setAddressError('Could not load your addresses. Please refresh.');
+    } finally {
+      setAddressesLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchCart();
+    fetchAddresses();
   }, []);
 
   // Update Quantity (Optimistic UI Update for speed)
@@ -64,23 +90,49 @@ const Cart = () => {
 
   // Phase 5: Place Order
   const handleCheckout = async () => {
-    if (!address.trim()) return alert('Please enter a delivery address!');
+    // Validate address selection
+    if (!selectedAddressId) {
+      setAddressError('Please select a delivery address');
+      return;
+    }
+
+    // Verify address still exists in current list
+    const addressExists = addresses.some(a => a.id === parseInt(selectedAddressId));
+    if (!addressExists) {
+      setAddressError('Your selected address is no longer available. Please select another.');
+      await fetchAddresses();
+      return;
+    }
 
     setCheckoutLoading(true); // Lock the checkout button
+    setAddressError('');
+
     try {
-      const response = await axios.post('/orders', { delivery_address: address });
+      // Send selected address_id directly
+      const response = await axios.post('/orders', { 
+        address_id: parseInt(selectedAddressId) 
+      });
       navigate(`/orders/${response.data.data.id}`); // Redirect to Confirmation
     } catch (err) {
-      alert(err.response?.data?.message || 'Checkout failed. Please try again.');
+      const errorMessage = err.response?.data?.message;
+      
+      // ✅ Handle case where address became invalid
+      if (errorMessage === 'Invalid delivery address. Address not found or does not belong to you.') {
+        setAddressError('Your selected address is no longer valid. Please select another.');
+        await fetchAddresses();
+        setSelectedAddressId('');
+      } else {
+        alert(errorMessage || 'Checkout failed. Please try again.');
+      }
 
-      // Phantom Cart Sync. If the network dropped but backend succeeded, we sync.
+      // Phantom Cart Sync
       await fetchCart();
     } finally {
       setCheckoutLoading(false);
     }
   };
 
-  if (loading) return <h2 style={{ padding: '20px' }}>Loading cart...</h2>;
+  if (loading || addressesLoading) return <h2 style={{ padding: '20px' }}>Loading cart...</h2>;
 
   // Safe chaining (item?.MenuItem?.price) prevents crashes if backend shape changes
   const subtotal = cartItems.reduce((sum, item) => sum + ((item?.MenuItem?.price || 0) * item.quantity), 0);
@@ -107,7 +159,7 @@ const Cart = () => {
             {cartItems.map((item) => (
               <div key={item.id} style={{ border: '1px solid #ccc', padding: '15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: processingId === item.id ? 0.5 : 1 }}>
                 <div>
-                  <h4 style={{ margin: '0 0 5px 0' }}>{item?.MenuItem?.name || 'Unknown Item'}</h4>
+                  <h4 style={{ margin: '0 0 5px 0' }}>{item?.MenuItem?.item_name || item?.MenuItem?.name || 'Unknown Item'}</h4>
                   <p style={{ margin: 0, color: 'gray' }}>${item?.MenuItem?.price || 0} each</p>
                 </div>
 
@@ -127,27 +179,73 @@ const Cart = () => {
             <p>Delivery Fee: ${DELIVERY_FEE.toFixed(2)}</p>
             <h3>Total: ${total.toFixed(2)}</h3>
 
-            <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <input
-                type="text"
-                placeholder="Enter Delivery Address..."
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                required
-                style={{ padding: '10px', fontSize: '16px' }}
-              />
-              <button
-                onClick={handleCheckout}
-                disabled={checkoutLoading || cartItems.length === 0 || !address.trim()}
-                style={{ padding: '15px', background: checkoutLoading || !address.trim() ? '#ccc' : 'green', color: 'white', fontSize: '18px', border: 'none', cursor: 'pointer' }}
-              >
-                {checkoutLoading ? 'Processing Order...' : 'Place Order'}
-              </button>
+            {/* Priority 2: Address Selection Section */}
+            <div style={{ marginTop: '20px', borderTop: '1px solid #ddd', paddingTop: '15px' }}>
+              <h4>Delivery Address</h4>
+              
+              {addressError && <p style={{ color: 'red', fontSize: '14px' }}>{addressError}</p>}
+              
+              {addresses.length === 0 ? (
+                <div style={{ padding: '15px', background: '#fff3cd', borderRadius: '8px' }}>
+                  <p style={{ margin: '0 0 10px 0' }}>You don't have any saved addresses.</p>
+                  <Link to="/addresses" style={{ color: '#007bff', textDecoration: 'none' }}>
+                    + Add an Address to Continue
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <select
+                    value={selectedAddressId}
+                    onChange={(e) => {
+                      setSelectedAddressId(e.target.value);
+                      setAddressError('');
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      fontSize: '16px',
+                      borderRadius: '8px',
+                      border: '1px solid #ccc',
+                      marginBottom: '10px'
+                    }}
+                  >
+                    <option value="">Select a delivery address</option>
+                    {addresses.map(addr => (
+                      <option key={addr.id} value={addr.id}>
+                        {addr.street}, {addr.city} {addr.is_default && ' (Default)'}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  <Link to="/addresses" style={{ fontSize: '14px', color: '#007bff' }}>
+                    Manage Addresses
+                  </Link>
+                </>
+              )}
             </div>
+
+            <button
+              onClick={handleCheckout}
+              disabled={checkoutLoading || cartItems.length === 0 || !selectedAddressId || addresses.length === 0}
+              style={{
+                padding: '15px',
+                background: (checkoutLoading || cartItems.length === 0 || !selectedAddressId || addresses.length === 0) ? '#ccc' : 'green',
+                color: 'white',
+                fontSize: '18px',
+                border: 'none',
+                cursor: (checkoutLoading || cartItems.length === 0 || !selectedAddressId || addresses.length === 0) ? 'not-allowed' : 'pointer',
+                width: '100%',
+                marginTop: '15px',
+                borderRadius: '8px'
+              }}
+            >
+              {checkoutLoading ? 'Processing Order...' : 'Place Order'}
+            </button>
           </div>
         </>
       )}
     </div>
   );
 };
+
 export default Cart;

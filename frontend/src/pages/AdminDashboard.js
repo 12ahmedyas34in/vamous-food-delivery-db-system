@@ -101,11 +101,11 @@ const AdminDashboard = () => {
           <div key={order.id} onClick={() => navigate(`/orders/${order.id}`)} style={styles.orderCard}>
             <div>
               <h4 style={{ margin: '0 0 5px 0' }}>Order #{order.id}</h4>
-              <p style={styles.meta}>{new Date(order.createdAt).toLocaleString()}</p>
+              <p style={styles.meta}>{new Date(order.created_at).toLocaleString()}</p>
             </div>
             <div style={{ textAlign: 'right' }}>
               <span style={{ ...styles.badge, background: STATUS_COLORS[order.status] || 'gray' }}>{order.status}</span>
-              <p style={{ margin: '8px 0 0 0', fontWeight: 'bold', fontSize: '15px' }}>${parseFloat(order.total_price).toFixed(2)}</p>
+              <p style={{ margin: '8px 0 0 0', fontWeight: 'bold', fontSize: '15px' }}>${parseFloat(order.total_amount).toFixed(2)}</p>
             </div>
           </div>
         ))}

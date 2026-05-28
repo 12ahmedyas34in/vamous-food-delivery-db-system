@@ -1,112 +1,102 @@
-const { Restaurant, MenuItem } = require('../models');
-const { Op } = require('sequelize');
+const { Restaurant, MenuItem }           = require('../models');
+const { Op }                             = require('sequelize');
+const { successResponse, errorResponse } = require('../utils/response');
 
-// 1. GET /api/restaurants
-exports.getRestaurants = async (req, res) => {
+// GET /api/restaurants
+exports.getRestaurants = async (req, res, next) => {
   try {
     const { name, cuisine } = req.query;
+    const limit  = Math.min(parseInt(req.query.limit)  || 10, 50);
+    const offset = Math.max(parseInt(req.query.offset) || 0,  0);
 
-    // Strict limit/offset validation (Prevents NaN crashes)
-    const parsedLimit = parseInt(req.query.limit);
-    const parsedOffset = parseInt(req.query.offset);
+    const whereClause    = { is_active: true };
+    const andConditions  = [];
 
-    const limit = (!isNaN(parsedLimit) && parsedLimit > 0) ? Math.min(parsedLimit, 50) : 10;
-    const offset = (!isNaN(parsedOffset) && parsedOffset >= 0) ? parsedOffset : 0;
-
-    let whereClause = { is_active: true };
-    let andConditions = [];
-
-    // NOTE: LIKE '%...%' causes full table scans. Fine for MVP, but production needs MySQL FULLTEXT or Elasticsearch.
-    if (name) andConditions.push({ name: { [Op.like]: `%${name}%` } });
+    if (name)    andConditions.push({ name: { [Op.like]: `%${name}%` } });
     if (cuisine) andConditions.push({ name: { [Op.like]: `%${cuisine}%` } });
+    if (andConditions.length > 0) whereClause[Op.and] = andConditions;
 
-    if (andConditions.length > 0) {
-      whereClause[Op.and] = andConditions;
-    }
+    const { count, rows } = await Restaurant.findAndCountAll({ where: whereClause, limit, offset });
 
-    const { count, rows } = await Restaurant.findAndCountAll({
-      where: whereClause,
-      limit,
-      offset,
-      order: [['id', 'ASC']] // Guarantee stable pagination order
-    });
-
-    // Complete pagination metadata
-    const page = Math.floor(offset / limit) + 1;
-    const totalPages = Math.ceil(count / limit);
-
-    res.status(200).json({
-      status: 'success',
-      results: rows.length,
-      total: count,
-      page,
-      totalPages,
-      data: rows
+    return res.status(200).json({
+      status:     'success',
+      total:      count,
+      page:       Math.floor(offset / limit) + 1,
+      totalPages: Math.ceil(count / limit),
+      results:    rows.length,
+      data:       rows,
     });
   } catch (error) {
-    console.error('getRestaurants Error:', error);
-    res.status(500).json({ status: 'fail', message: 'Internal server error' });
+    next(error);
   }
 };
 
-// 2. GET /api/restaurants/:id
-exports.getRestaurantById = async (req, res) => {
+// GET /api/restaurants/:id
+exports.getRestaurantById = async (req, res, next) => {
   try {
-    if (isNaN(req.params.id)) return res.status(400).json({ status: 'fail', message: 'Invalid ID format' });
+    if (isNaN(req.params.id)) return errorResponse(res, 'Invalid ID format', 400);
 
-    const restaurant = await Restaurant.findOne({
-      where: { id: req.params.id, is_active: true }
-    });
+    const restaurant = await Restaurant.findOne({ where: { id: req.params.id, is_active: true } });
+    if (!restaurant) return errorResponse(res, 'Restaurant not found or inactive', 404);
 
-    if (!restaurant) return res.status(404).json({ status: 'fail', message: 'Restaurant not found' });
-
-    res.status(200).json({ status: 'success', data: restaurant });
+    return successResponse(res, restaurant, 'Restaurant retrieved successfully');
   } catch (error) {
-    console.error('getRestaurantById Error:', error);
-    res.status(500).json({ status: 'fail', message: 'Internal server error' });
+    next(error);
   }
 };
 
-// 3. GET /api/restaurants/:id/menu
-exports.getRestaurantMenu = async (req, res) => {
+// GET /api/restaurants/:id/menu
+exports.getRestaurantMenu = async (req, res, next) => {
   try {
-    if (isNaN(req.params.id)) return res.status(400).json({ status: 'fail', message: 'Invalid ID format' });
+    if (isNaN(req.params.id)) return errorResponse(res, 'Invalid ID format', 400);
 
     const restaurant = await Restaurant.findByPk(req.params.id);
     if (!restaurant || !restaurant.is_active) {
-      return res.status(404).json({ status: 'fail', message: 'Restaurant not found' });
+      return errorResponse(res, 'Restaurant not found or inactive', 404);
     }
 
     const menu = await MenuItem.findAll({
       where: { restaurant_id: req.params.id, is_available: true },
-      order: [['id', 'ASC']] // Keep menu item order consistent
     });
 
-    res.status(200).json({
-      status: 'success',
-      results: menu.length,
-      data: menu
-    });
+    // DTO: maps item_name → name so the existing frontend doesn't break
+    const menuData = menu.map(item => ({
+      id:           item.id,
+      name:         item.item_name,
+      description:  item.description,
+      price:        item.price,
+      is_available: item.is_available,
+      category_id:  item.category_id,
+      image_url:    item.image_url,
+    }));
+
+    return successResponse(res, menuData, 'Menu retrieved successfully');
   } catch (error) {
-    console.error('getRestaurantMenu Error:', error);
-    res.status(500).json({ status: 'fail', message: 'Internal server error' });
+    next(error);
   }
 };
 
-// 4. GET /api/menu-items/:id
-exports.getMenuItemById = async (req, res) => {
+// GET /api/menu-items/:id
+exports.getMenuItemById = async (req, res, next) => {
   try {
-    if (isNaN(req.params.id)) return res.status(400).json({ status: 'fail', message: 'Invalid ID format' });
+    if (isNaN(req.params.id)) return errorResponse(res, 'Invalid ID format', 400);
 
-    const menuItem = await MenuItem.findOne({
-      where: { id: req.params.id, is_available: true }
-    });
+    const menuItem = await MenuItem.findOne({ where: { id: req.params.id, is_available: true } });
+    if (!menuItem) return errorResponse(res, 'Menu item not found or unavailable', 404);
 
-    if (!menuItem) return res.status(404).json({ status: 'fail', message: 'Menu item not found' });
+    // DTO: maps item_name → name for frontend compatibility
+    const itemData = {
+      id:           menuItem.id,
+      name:         menuItem.item_name,
+      description:  menuItem.description,
+      price:        menuItem.price,
+      is_available: menuItem.is_available,
+      category_id:  menuItem.category_id,
+      image_url:    menuItem.image_url,
+    };
 
-    res.status(200).json({ status: 'success', data: menuItem });
+    return successResponse(res, itemData, 'Menu item retrieved successfully');
   } catch (error) {
-    console.error('getMenuItemById Error:', error);
-    res.status(500).json({ status: 'fail', message: 'Internal server error' });
+    next(error);
   }
 };

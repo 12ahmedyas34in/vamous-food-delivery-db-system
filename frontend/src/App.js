@@ -15,6 +15,7 @@ import AdminDashboard   from './pages/AdminDashboard';
 import Home             from './pages/Home';
 import AddRestaurant    from './pages/AddRestaurant';
 import SignUpToDeliver  from './pages/SignUpToDeliver';
+import AddressBook      from './pages/AddressBook';
 
 // ── Auth guard ─────────────────────────────────────────
 const ProtectedRoute = ({ children }) => {
@@ -43,6 +44,7 @@ function App() {
         <Route path="/restaurants"          element={<ProtectedRoute><RestaurantList /></ProtectedRoute>} />
         <Route path="/restaurants/:id/menu" element={<ProtectedRoute><Menu /></ProtectedRoute>} />
         <Route path="/cart"               element={<ProtectedRoute><Cart /></ProtectedRoute>} />
+        <Route path="/addresses"          element={<ProtectedRoute><AddressBook /></ProtectedRoute>} />
         <Route path="/orders"             element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
         <Route path="/orders/:id"         element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
         <Route path="/admin"              element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />

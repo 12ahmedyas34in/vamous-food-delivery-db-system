@@ -117,15 +117,15 @@ const OrderConfirmation = () => {
         <h3 style={{ margin: '0 0 16px' }}>Receipt breakdown</h3>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {order.OrderItems?.map(item => (
-            <li key={item.id} style={styles.lineItem}>
+            <li key={item.line_no} style={styles.lineItem}>
               <span>{item.quantity}× {item.MenuItem?.name || 'Unknown item'}</span>
-              <span>${(parseFloat(item.price) * item.quantity).toFixed(2)}</span>
+              <span>${(parseFloat(item.unit_price) * item.quantity).toFixed(2)}</span>
             </li>
           ))}
         </ul>
         <div style={{ ...styles.lineItem, fontWeight: 'bold', fontSize: '16px', marginTop: '12px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
           <span>Total (incl. delivery)</span>
-          <span>${parseFloat(order.total_price).toFixed(2)}</span>
+          <span>${parseFloat(order.total_amount).toFixed(2)}</span>
         </div>
       </div>
 

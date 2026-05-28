@@ -1,42 +1,24 @@
-const { Review, Order, sequelize } = require('../models');
+const { Review, Order, sequelize }       = require('../models');
+const { successResponse, errorResponse } = require('../utils/response');
 
 // POST /api/orders/:id/reviews
-exports.addReview = async (req, res) => {
+exports.addReview = async (req, res, next) => {
   try {
     const { rating, comment } = req.body;
     const orderId = parseInt(req.params.id, 10);
 
     if (!rating || !Number.isInteger(Number(rating)) || rating < 1 || rating > 5) {
-      return res.status(400).json({
-        status:  'fail',
-        message: 'Rating must be an integer between 1 and 5',
-      });
+      return errorResponse(res, 'Rating must be an integer between 1 and 5', 400);
     }
 
-    const order = await Order.findOne({
-      where: { id: orderId, user_id: req.user.id },
-    });
+    const order = await Order.findOne({ where: { id: orderId, user_id: req.user.id } });
 
     if (!order) {
-      return res.status(404).json({
-        status:  'fail',
-        message: 'Order not found or access denied',
-      });
-    }
-
-    const VALID_STATUSES = ['PENDING','CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','COMPLETED','CANCELLED'];
-    if (!VALID_STATUSES.includes(order.status)) {
-      return res.status(500).json({
-        status:  'fail',
-        message: 'Order is in an invalid state. Contact support.',
-      });
+      return errorResponse(res, 'Order not found or access denied', 404);
     }
 
     if (order.status !== 'COMPLETED') {
-      return res.status(400).json({
-        status:  'fail',
-        message: 'You can only review COMPLETED orders',
-      });
+      return errorResponse(res, 'You can only review COMPLETED orders', 400);
     }
 
     const review = await sequelize.transaction(async (t) => {
@@ -47,28 +29,21 @@ exports.addReview = async (req, res) => {
       }, { transaction: t });
     });
 
-    return res.status(201).json({ status: 'success', data: review });
-
+    return successResponse(res, review, 'Review created successfully', 201);
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {
-      return res.status(400).json({
-        status:  'fail',
-        message: 'You have already reviewed this order',
-      });
+      return errorResponse(res, 'You have already reviewed this order', 400);
     }
     if (error.name === 'SequelizeValidationError') {
-      return res.status(400).json({
-        status:  'fail',
-        message: error.errors.map(e => e.message).join(', '),
-      });
+      const errors = error.errors.map(e => ({ field: e.path, message: e.message }));
+      return errorResponse(res, 'Validation failed', 400, errors);
     }
-    console.error('[addReview]', error);
-    res.status(500).json({ status: 'fail', message: 'Internal server error' });
+    next(error);
   }
 };
 
 // GET /api/restaurants/:id/reviews
-exports.getRestaurantReviews = async (req, res) => {
+exports.getRestaurantReviews = async (req, res, next) => {
   try {
     const restaurantId = parseInt(req.params.id, 10);
 
@@ -76,9 +51,9 @@ exports.getRestaurantReviews = async (req, res) => {
       include: [{
         model:      Order,
         where:      { restaurant_id: restaurantId },
-        attributes: ['user_id', 'createdAt'],
+        attributes: ['user_id', 'created_at'],
       }],
-      order: [['createdAt', 'DESC']],
+      order: [['created_at', 'DESC']],
     });
 
     const stats = await Review.findOne({
@@ -97,7 +72,7 @@ exports.getRestaurantReviews = async (req, res) => {
     const reviewData = reviews.map(r => ({
       rating:    r.rating,
       comment:   r.comment,
-      createdAt: r.createdAt,
+      createdAt: r.created_at || r.createdAt,
       userId:    r.Order?.user_id ?? null,
     }));
 
@@ -109,9 +84,7 @@ exports.getRestaurantReviews = async (req, res) => {
       },
       data: reviewData,
     });
-
   } catch (error) {
-    console.error('[getRestaurantReviews]', error);
-    res.status(500).json({ status: 'fail', message: 'Internal server error' });
+    next(error);
   }
 };

@@ -1,3 +1,5 @@
+// backend/controllers/paymentController.js
+// Uses successResponse/errorResponse helpers, transactions, state machine
 const { Order, Payment, PaymentMethod, OrderStatusHistory, sequelize } = require('../models');
 const { canTransition }                  = require('../services/orderStateMachine');
 const { successResponse, errorResponse } = require('../utils/response');
