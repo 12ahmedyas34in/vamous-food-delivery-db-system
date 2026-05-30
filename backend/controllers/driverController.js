@@ -18,7 +18,7 @@ exports.getAvailableOrders = async (req, res) => {
       include: [
         { model: Restaurant, attributes: ['name', 'address'] }
       ],
-      order: [['createdAt', 'ASC']] // Oldest orders first
+      order: [['created_at', 'ASC']]
     });
 
     res.status(200).json({ status: 'success', results: availableOrders.length, data: availableOrders });

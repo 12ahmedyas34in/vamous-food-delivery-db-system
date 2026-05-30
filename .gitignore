@@ -1,1 +1,5 @@
 PROJECT_PROGRESS.md 
+# Logs
+logs/
+*.log
+.vscode/
