@@ -16,6 +16,7 @@ const orderRoutes      = require('./routes/orderRoutes');
 const paymentRoutes    = require('./routes/paymentRoutes');
 const driverRoutes     = require('./routes/driverRoutes');
 const addressRoutes    = require('./routes/addressRoutes');
+const uploadRoutes     = require('./routes/uploadRoutes');
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/api/orders',      orderRoutes);
 app.use('/api/payments',    paymentRoutes);
 app.use('/api/drivers',     driverRoutes);
 app.use('/api/addresses',   addressRoutes);
+app.use('/api/upload',      uploadRoutes);
 
 // 3. HEALTH CHECK
 app.get('/api/health', async (req, res) => {

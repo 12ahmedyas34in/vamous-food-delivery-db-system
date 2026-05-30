@@ -1,115 +1,235 @@
 // frontend/src/pages/Menu.js
+//
+// Phase 2: Restaurant header shows cover image. Menu item rows show item images.
+// Both use fallback UI when image_url is null.
+// Cart logic, reviews, and API calls unchanged from pre-Phase 2.
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from '../api/axios';
 
+// Shown in the restaurant header when image_url is null
+const HeaderPlaceholder = () => (
+  <div
+    className="w-full h-full"
+    style={{ background: 'linear-gradient(135deg, #87BEEB 0%, #3787cc 100%)' }}
+  />
+);
+
+// Shown in menu item row when image_url is null
+const ItemImagePlaceholder = () => (
+  <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-xl">
+    <span className="text-2xl select-none">🍽️</span>
+  </div>
+);
+
+// Star rating display — shared by review list
+const StarRating = ({ rating }) => (
+  <div className="flex items-center gap-0.5">
+    {[1, 2, 3, 4, 5].map(star => (
+      <span
+        key={star}
+        className={star <= rating ? 'text-yellow-400' : 'text-gray-200'}
+        aria-hidden="true"
+      >
+        ★
+      </span>
+    ))}
+  </div>
+);
+
 const Menu = () => {
-  const { id } = useParams(); 
+  const { id }   = useParams();
   const navigate = useNavigate();
-  
-  const [menuItems, setMenuItems] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [stats, setStats] = useState({ averageRating: 0, totalReviews: 0 });
-  const [error, setError] = useState('');
+
+  const [restaurant, setRestaurant] = useState(null);
+  const [menuItems,  setMenuItems]  = useState([]);
+  const [reviews,    setReviews]    = useState([]);
+  const [stats,      setStats]      = useState({ averageRating: 0, totalReviews: 0 });
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState('');
+  const [addingId,   setAddingId]   = useState(null); // prevents double-tap on Add button
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch Menu and Reviews at the same time!
-        const [menuRes, reviewsRes] = await Promise.all([
+        const [restRes, menuRes, reviewsRes] = await Promise.all([
+          axios.get(`/restaurants/${id}`),
           axios.get(`/restaurants/${id}/menu`),
-          axios.get(`/restaurants/${id}/reviews`)
+          axios.get(`/restaurants/${id}/reviews`),
         ]);
-        
-        setMenuItems(menuRes.data.data);
-        setReviews(reviewsRes.data.data);
-        setStats(reviewsRes.data.stats);
-      } catch (err) {
-        setError('Failed to load restaurant data.');
+        setRestaurant(restRes.data.data);
+        setMenuItems(menuRes.data.data   || []);
+        setReviews(reviewsRes.data.data  || []);
+        setStats(reviewsRes.data.stats   || { averageRating: 0, totalReviews: 0 });
+      } catch {
+        setError('Failed to load restaurant data. Please try again.');
+      } finally {
+        setLoading(false);
       }
     };
     fetchData();
   }, [id]);
 
   const addToCart = async (menuItemId) => {
+    if (addingId === menuItemId) return; // prevent double-click
+    setAddingId(menuItemId);
     try {
       await axios.post('/cart', { menu_item_id: menuItemId, quantity: 1 });
+      // Temporary feedback — replace with a toast in Phase 3 polish
       alert('Added to cart!');
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to add to cart');
+      alert(err.response?.data?.message || 'Failed to add to cart.');
+    } finally {
+      setAddingId(null);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center font-body">
+        <p className="text-gray-400">Loading menu…</p>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ padding: '20px', fontFamily: 'Arial', maxWidth: '800px', margin: '0 auto' }}>
-      <button onClick={() => navigate('/restaurants')} style={{ padding: '8px 16px', cursor: 'pointer', background: '#f5f5f5', border: 'none', borderRadius: '6px', fontWeight: 'bold' }}>
-        ← Back to Restaurants
-      </button>
-      
-      {/* ─── RESTAURANT HEADER & RATING ─── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', borderBottom: '2px solid #eee', paddingBottom: '15px' }}>
-        <h2 style={{ margin: 0, fontSize: '28px' }}>Restaurant Menu</h2>
-        {stats.totalReviews > 0 ? (
-          <div style={{ background: '#fffbe6', border: '1px solid #ffe58f', padding: '8px 15px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <span style={{ color: '#faad14', fontSize: '18px' }}>★</span>
-            <strong style={{ fontSize: '18px' }}>{stats.averageRating}</strong>
-            <span style={{ color: '#888', fontSize: '14px' }}>({stats.totalReviews} reviews)</span>
-          </div>
+    <div className="min-h-screen bg-gray-50 font-body">
+
+      {/* ── Restaurant header with cover image ── */}
+      <div className="relative h-56 overflow-hidden bg-gray-200">
+        {restaurant?.image_url ? (
+          <img
+            src={restaurant.image_url}
+            alt={restaurant.name}
+            className="w-full h-full object-cover"
+          />
         ) : (
-          <span style={{ color: '#888', fontStyle: 'italic' }}>No reviews yet</span>
+          <HeaderPlaceholder />
         )}
-      </div>
-
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-
-      {/* ─── MENU ITEMS ─── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' }}>
-        {menuItems.length === 0 && !error && <p>No items available right now.</p>}
-        {menuItems.map(item => (
-          <div key={item.id} style={{ border: '1px solid #e8e8e8', padding: '20px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.02)' }}>
-            <div>
-              <h3 style={{ margin: '0 0 8px 0' }}>{item.name}</h3>
-              <p style={{ margin: 0, color: '#237804', fontWeight: 'bold', fontSize: '18px' }}>${item.price}</p>
-            </div>
-            <button onClick={() => addToCart(item.id)} style={{ padding: '10px 20px', background: '#000', color: '#fff', cursor: 'pointer', border: 'none', borderRadius: '6px', fontWeight: 'bold' }}>
-              Add to Cart
-            </button>
+        {/* Text legibility gradient */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 p-6">
+          <button
+            onClick={() => navigate('/restaurants')}
+            className="text-white/70 hover:text-white text-sm mb-2 flex items-center gap-1 transition-colors"
+          >
+            ← Restaurants
+          </button>
+          <h1 className="font-display text-2xl font-bold text-white">{restaurant?.name}</h1>
+          <div className="flex items-center gap-4 mt-1.5">
+            {stats.totalReviews > 0 && (
+              <span className="text-yellow-400 text-sm font-medium">
+                ★ {stats.averageRating} · {stats.totalReviews} review{stats.totalReviews !== 1 ? 's' : ''}
+              </span>
+            )}
+            {restaurant?.estimated_time && (
+              <span className="text-white/60 text-sm">~{restaurant.estimated_time} min</span>
+            )}
+            {restaurant?.delivery_fee > 0 && (
+              <span className="text-white/60 text-sm">
+                ETB {parseFloat(restaurant.delivery_fee).toFixed(0)} delivery
+              </span>
+            )}
           </div>
-        ))}
-      </div>
-      
-      <div style={{ marginTop: '30px', textAlign: 'center' }}>
-        <button onClick={() => navigate('/cart')} style={{ padding: '15px 40px', background: 'green', color: 'white', fontSize: '18px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 6px rgba(0,128,0,0.2)' }}>
-          Proceed to Cart →
-        </button>
+        </div>
       </div>
 
-      {/* ─── REVIEWS SECTION ─── */}
-      <div style={{ marginTop: '50px', paddingTop: '30px', borderTop: '2px solid #eee' }}>
-        <h3>What customers are saying</h3>
-        {reviews.length === 0 ? (
-          <p style={{ color: '#888' }}>Be the first to leave a review after your order!</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '15px' }}>
-            {reviews.map((review, index) => (
-              <div key={`${review.createdAt}-${review.userId ?? index}`} style={{ background: '#f9f9f9', padding: '15px', borderRadius: '8px', border: '1px solid #eee' }}>
-                <div style={{ display: 'flex', gap: '5px', marginBottom: '8px' }}>
-                  {[1, 2, 3, 4, 5].map(star => (
-                    <span key={star} style={{ color: star <= review.rating ? '#faad14' : '#ddd', fontSize: '16px' }}>★</span>
-                  ))}
-                  <span style={{ color: '#aaa', fontSize: '12px', marginLeft: '10px', marginTop: '2px' }}>
-                    {new Date(review.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-                <p style={{ margin: 0, fontSize: '15px', color: '#333', fontStyle: review.comment ? 'normal' : 'italic' }}>
-                  {review.comment || 'No comment provided.'}
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+        {error && (
+          <div className="bg-red-50 border border-red-100 rounded-xl p-4 mb-6">
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        )}
+
+        {/* ── Menu items ── */}
+        <div className="flex flex-col gap-3 mb-10">
+          {!error && menuItems.length === 0 && (
+            <p className="text-gray-400 text-center py-12">No items available right now.</p>
+          )}
+          {menuItems.map(item => (
+            <div
+              key={item.id}
+              className="bg-white rounded-2xl border border-gray-100 overflow-hidden
+                flex items-center gap-4 p-4 hover:shadow-sm transition-shadow duration-200"
+            >
+              {/* Item image */}
+              <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
+                {item.image_url ? (
+                  <img
+                    src={item.image_url}
+                    alt={item.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <ItemImagePlaceholder />
+                )}
+              </div>
+
+              {/* Item details */}
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-gray-900">{item.name}</h3>
+                {item.description && (
+                  <p className="text-gray-400 text-sm mt-0.5 line-clamp-2 leading-relaxed">
+                    {item.description}
+                  </p>
+                )}
+                <p className="text-brand-500 font-bold mt-1.5">
+                  ETB {parseFloat(item.price).toFixed(2)}
                 </p>
               </div>
-            ))}
+
+              {/* Add to cart */}
+              <button
+                onClick={() => addToCart(item.id)}
+                disabled={addingId === item.id}
+                className="flex-shrink-0 px-4 py-2 bg-brand-300 hover:bg-brand-400 active:bg-brand-500
+                  text-white text-sm font-medium rounded-full
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  transition-colors duration-200"
+              >
+                {addingId === item.id ? '…' : 'Add'}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Proceed to cart */}
+        <div className="text-center mb-12">
+          <button
+            onClick={() => navigate('/cart')}
+            className="px-8 py-3 bg-gray-900 hover:bg-gray-800 active:bg-gray-700
+              text-white font-semibold rounded-full transition-colors duration-200"
+          >
+            View cart →
+          </button>
+        </div>
+
+        {/* ── Reviews ── */}
+        {reviews.length > 0 && (
+          <div className="border-t border-gray-200 pt-8">
+            <h2 className="font-display text-xl font-bold text-gray-900 mb-5">Customer reviews</h2>
+            <div className="flex flex-col gap-3">
+              {reviews.map((review, index) => (
+                <div
+                  key={`${review.createdAt}-${index}`}
+                  className="bg-white rounded-xl border border-gray-100 p-4"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <StarRating rating={review.rating} />
+                    <span className="text-gray-400 text-xs">
+                      {new Date(review.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {review.comment && (
+                    <p className="text-gray-600 text-sm leading-relaxed">{review.comment}</p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
-
     </div>
   );
 };

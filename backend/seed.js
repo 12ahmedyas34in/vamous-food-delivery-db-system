@@ -67,6 +67,9 @@ async function seed() {
         delivery_fee:   30.00,
         estimated_time: 35,
         is_active:      true,
+        // Phase 2: real Cloudinary URL — verifies full image pipeline on first boot
+        // Replace with your own after running: POST /api/upload/restaurant
+        image_url: 'https://res.cloudinary.com/demo/image/upload/w_1200,q_auto,f_auto/food_restaurant',
       },
       {
         owner_id:       owner.id,

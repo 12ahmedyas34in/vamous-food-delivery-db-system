@@ -1,6 +1,14 @@
-const { Restaurant, MenuItem }           = require('../models');
-const { Op }                             = require('sequelize');
-const { successResponse, errorResponse } = require('../utils/response');
+const { Restaurant, MenuItem, CuisineType } = require('../models');
+const { Op }                                = require('sequelize');
+const { successResponse, errorResponse }    = require('../utils/response');
+
+// Reusable include — keeps both getRestaurants and getRestaurantById in sync
+const CUISINE_INCLUDE = {
+  model:   CuisineType,
+  as:      'Cuisines',
+  attributes: ['id', 'type_name'],
+  through: { attributes: [] }, // hide junction table fields
+};
 
 // GET /api/restaurants
 exports.getRestaurants = async (req, res, next) => {
@@ -16,7 +24,12 @@ exports.getRestaurants = async (req, res, next) => {
     if (cuisine) andConditions.push({ name: { [Op.like]: `%${cuisine}%` } });
     if (andConditions.length > 0) whereClause[Op.and] = andConditions;
 
-    const { count, rows } = await Restaurant.findAndCountAll({ where: whereClause, limit, offset });
+    const { count, rows } = await Restaurant.findAndCountAll({
+      where:   whereClause,
+      include: [CUISINE_INCLUDE],
+      limit,
+      offset,
+    });
 
     return res.status(200).json({
       status:     'success',
@@ -36,7 +49,10 @@ exports.getRestaurantById = async (req, res, next) => {
   try {
     if (isNaN(req.params.id)) return errorResponse(res, 'Invalid ID format', 400);
 
-    const restaurant = await Restaurant.findOne({ where: { id: req.params.id, is_active: true } });
+    const restaurant = await Restaurant.findOne({
+      where:   { id: req.params.id, is_active: true },
+      include: [CUISINE_INCLUDE],
+    });
     if (!restaurant) return errorResponse(res, 'Restaurant not found or inactive', 404);
 
     return successResponse(res, restaurant, 'Restaurant retrieved successfully');
