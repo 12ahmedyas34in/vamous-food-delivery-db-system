@@ -16,6 +16,7 @@ import Home             from './pages/Home';
 import AddRestaurant    from './pages/AddRestaurant';
 import SignUpToDeliver  from './pages/SignUpToDeliver';
 import AddressBook      from './pages/AddressBook';
+import NotFound         from './pages/NotFound';
 
 // ── Auth guard ─────────────────────────────────────────
 const ProtectedRoute = ({ children }) => {
@@ -48,6 +49,9 @@ function App() {
         <Route path="/orders"             element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
         <Route path="/orders/:id"         element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
         <Route path="/admin"              element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+
+        {/* ── Catch-all — must be last ── */}
+        <Route path="*" element={<NotFound />} />
 
       </Routes>
     </BrowserRouter>
