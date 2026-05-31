@@ -19,36 +19,36 @@ import axios from '../api/axios';
 // ── Payment method icons ──────────────────────────────────────────────────────
 const METHOD_META = {
   'Cash on Delivery': {
-    icon:        '💵',
+    icon: '💵',
     description: 'Pay the driver when your order arrives. No waiting required.',
-    badge:       'Instant confirmation',
-    badgeColor:  'bg-green-50 text-green-700',
+    badge: 'Instant confirmation',
+    badgeColor: 'bg-green-50 text-green-700',
   },
   'Bank Transfer': {
-    icon:        '🏦',
-    description: 'Transfer to our bank account. Admin confirms within 1–2 hours.',
-    badge:       'Pending confirmation',
-    badgeColor:  'bg-amber-50 text-amber-700',
+    icon: '🏦',
+    description: 'Transfer to our bank account. Admin confirms within 1 minutes.',
+    badge: 'Pending confirmation',
+    badgeColor: 'bg-amber-50 text-amber-700',
   },
   'Tele Birr': {
-    icon:        '📱',
-    description: 'Send via Tele Birr to our account. Admin confirms within 1–2 hours.',
-    badge:       'Pending confirmation',
-    badgeColor:  'bg-amber-50 text-amber-700',
+    icon: '📱',
+    description: 'Send via Tele Birr to our account. Admin confirms within 1 minute.',
+    badge: 'Pending confirmation',
+    badgeColor: 'bg-amber-50 text-amber-700',
   },
 };
 
 const Cart = () => {
   const navigate = useNavigate();
 
-  const [cartItems,       setCartItems]       = useState([]);
-  const [addresses,       setAddresses]       = useState([]);
-  const [paymentMethods,  setPaymentMethods]  = useState([]);
+  const [cartItems, setCartItems] = useState([]);
+  const [addresses, setAddresses] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
-  const [selectedMethod,  setSelectedMethod]  = useState(null); // payment_method_id
-  const [loading,         setLoading]         = useState(true);
-  const [submitting,      setSubmitting]       = useState(false);
-  const [error,           setError]           = useState('');
+  const [selectedMethod, setSelectedMethod] = useState(null); // payment_method_id
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   // Fetch cart, addresses, and payment methods in parallel
   useEffect(() => {
@@ -59,8 +59,8 @@ const Cart = () => {
           axios.get('/addresses'),
           axios.get('/payments/methods'),
         ]);
-        setCartItems(cartRes.data.data       || []);
-        setAddresses(addrRes.data.data       || []);
+        setCartItems(cartRes.data.data || []);
+        setAddresses(addrRes.data.data || []);
         setPaymentMethods(methodsRes.data.data || []);
 
         // Auto-select the default address
@@ -102,9 +102,9 @@ const Cart = () => {
   // ── Order submission ──────────────────────────────────────────────────────
   const handleCheckout = async () => {
     if (submitting) return;
-    if (cartItems.length === 0) { setError('Your cart is empty.');            return; }
-    if (!selectedAddress)       { setError('Please select a delivery address.'); return; }
-    if (!selectedMethod)        { setError('Please select a payment method.');   return; }
+    if (cartItems.length === 0) { setError('Your cart is empty.'); return; }
+    if (!selectedAddress) { setError('Please select a delivery address.'); return; }
+    if (!selectedMethod) { setError('Please select a payment method.'); return; }
 
     setSubmitting(true);
     setError('');
@@ -112,7 +112,7 @@ const Cart = () => {
     try {
       // Backend reads cart items server-side — only address and payment method needed
       const response = await axios.post('/orders', {
-        address_id:        selectedAddress,
+        address_id: selectedAddress,
         payment_method_id: selectedMethod,
       });
       navigate(`/orders/${response.data.data.id}`);
@@ -127,7 +127,7 @@ const Cart = () => {
     (sum, item) => sum + parseFloat(item.MenuItem?.price ?? 0) * item.quantity, 0
   );
   const selectedMethodName = paymentMethods.find(m => m.id === selectedMethod)?.method_name ?? '';
-  const isPendingPayment   = ['Bank Transfer', 'Tele Birr'].includes(selectedMethodName);
+  const isPendingPayment = ['Bank Transfer', 'Tele Birr'].includes(selectedMethodName);
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
@@ -308,7 +308,7 @@ const Cart = () => {
                   <p className="text-xs text-amber-700 leading-relaxed">
                     <strong>How it works:</strong> Your order will be placed immediately and will
                     show as <em>Awaiting Payment</em>. Once you transfer the funds, an admin will
-                    verify and confirm your order within 1–2 hours.
+                    verify and confirm your order within 1–2 minutes.
                   </p>
                 </div>
               )}

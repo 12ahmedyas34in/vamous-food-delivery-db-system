@@ -116,6 +116,7 @@ exports.createOrder = async (req, res) => {
         status_name:   'PAID',
         actor_user_id: user_id,
         notes:         'Cash on delivery — payment collected at door',
+        updated_at:    new Date(Date.now() + 1000),
       }, { transaction: t });
     } else {
       await OrderStatusHistory.create({
@@ -123,6 +124,7 @@ exports.createOrder = async (req, res) => {
         status_name:   'PENDING_PAYMENT',
         actor_user_id: user_id,
         notes:         'Awaiting manual payment confirmation',
+        updated_at:    new Date(Date.now() + 1000),
       }, { transaction: t });
     }
 
