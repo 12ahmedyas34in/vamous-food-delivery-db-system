@@ -226,31 +226,39 @@ const Cart = () => {
                     >Add one</button>
                   </p>
                 ) : (
-                  addresses.map(addr => (
-                    <label
-                      key={addr.id}
-                      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all
-                        ${selectedAddress === addr.id
-                          ? 'border-brand-300 bg-brand-50'
-                          : 'border-gray-100 hover:border-gray-200'}`}
+                  <>
+                    {addresses.map(addr => (
+                      <label
+                        key={addr.id}
+                        className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all
+                          ${selectedAddress === addr.id
+                            ? 'border-brand-300 bg-brand-50'
+                            : 'border-gray-100 hover:border-gray-200'}`}
+                      >
+                        <input
+                          type="radio"
+                          name="address"
+                          value={addr.id}
+                          checked={selectedAddress === addr.id}
+                          onChange={() => setSelectedAddress(addr.id)}
+                          className="mt-0.5 accent-brand-400"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{addr.street}</p>
+                          <p className="text-xs text-gray-400">{addr.city}</p>
+                          {addr.is_default && (
+                            <span className="text-xs text-brand-500 font-medium">Default</span>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                    <button
+                      onClick={() => navigate('/addresses')}
+                      className="mt-2 text-xs text-brand-500 hover:text-brand-600 hover:underline transition-colors self-start"
                     >
-                      <input
-                        type="radio"
-                        name="address"
-                        value={addr.id}
-                        checked={selectedAddress === addr.id}
-                        onChange={() => setSelectedAddress(addr.id)}
-                        className="mt-0.5 accent-brand-400"
-                      />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{addr.street}</p>
-                        <p className="text-xs text-gray-400">{addr.city}</p>
-                        {addr.is_default && (
-                          <span className="text-xs text-brand-500 font-medium">Default</span>
-                        )}
-                      </div>
-                    </label>
-                  ))
+                      + Manage addresses
+                    </button>
+                  </>
                 )}
               </div>
             </div>
