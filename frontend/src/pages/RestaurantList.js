@@ -1,8 +1,4 @@
 // frontend/src/pages/RestaurantList.js
-//
-// Phase 2: Restaurant cards show cover images with a gradient fallback.
-// Cuisine tags rendered from the M:N restaurant_cuisines join.
-// All other logic (fetch, navigate) unchanged from pre-Phase 2.
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';

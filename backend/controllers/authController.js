@@ -81,7 +81,6 @@ exports.login = async (req, res) => {
       return res.status(401).json({ status: 'fail', message: 'Invalid email or password' });
     }
 
-    // Phase 1: password column is now password_hash
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
       return res.status(401).json({ status: 'fail', message: 'Invalid email or password' });
@@ -106,7 +105,6 @@ exports.login = async (req, res) => {
 // GET /api/auth/me
 exports.getMe = async (req, res, next) => {
   try {
-    // ✅ P3: Return normalized user from req.user (already has 'name')
     return successResponse(res, {
       id:    req.user.id,
       name:  req.user.full_name,

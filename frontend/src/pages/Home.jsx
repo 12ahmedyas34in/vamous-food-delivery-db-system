@@ -1,8 +1,4 @@
 // frontend/src/pages/Home.jsx
-//
-// Phase 0 — Public landing page at route "/"
-// Sections: Header (via component), Hero, How it works, Why us, CTA strip, Footer
-// No API calls — fully static. Replaced with real data in Phase 5.
 
 import React, { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
@@ -278,7 +274,7 @@ const Home = () => {
       </section>
 
       {/* ════════════════════════════════════════════════════
-          FEATURED CATEGORIES (static placeholder — real data in Phase 5)
+          FEATURED CATEGORIES
       ════════════════════════════════════════════════════ */}
       <section className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

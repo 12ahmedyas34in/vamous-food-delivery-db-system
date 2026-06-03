@@ -1,8 +1,4 @@
 // frontend/src/pages/Menu.js
-//
-// Phase 2: Restaurant header shows cover image. Menu item rows show item images.
-// Both use fallback UI when image_url is null.
-// Cart logic, reviews, and API calls unchanged from pre-Phase 2.
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -76,7 +72,7 @@ const Menu = () => {
     setAddingId(menuItemId);
     try {
       await axios.post('/cart', { menu_item_id: menuItemId, quantity: 1 });
-      // Temporary feedback — replace with a toast in Phase 3 polish
+      // Feedback toast
       alert('Added to cart!');
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to add to cart.');

@@ -18,13 +18,11 @@ import MyOrders          from './pages/MyOrders';
 import OrderConfirmation from './pages/OrderConfirmation';
 import AdminDashboard    from './pages/AdminDashboard';
 
-// ── Phase 0 pages ─────────────────────────────────────────────────────────────
 import Home             from './pages/Home';
 import AddRestaurant    from './pages/AddRestaurant';
 import SignUpToDeliver  from './pages/SignUpToDeliver';
 import AddressBook      from './pages/AddressBook';
 
-// ── Phase 3 pages ─────────────────────────────────────────────────────────────
 import NotFound         from './pages/NotFound';
 import OwnerDashboard   from './pages/OwnerDashboard';
 

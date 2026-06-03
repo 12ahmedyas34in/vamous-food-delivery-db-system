@@ -1,7 +1,5 @@
 // backend/controllers/uploadController.js
 //
-// Phase 2 — Cloudinary upload handler
-//
 // Flow:
 //   1. Frontend sends multipart/form-data with an image file
 //   2. multer holds the file in memory (no disk write)

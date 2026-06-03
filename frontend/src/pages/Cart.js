@@ -1,16 +1,10 @@
 // frontend/src/pages/Cart.js
 //
-// Phase 3 Part 1 change: Payment method selection added at checkout.
-//
-// New behaviour:
-//   - Fetches available payment methods from GET /api/payments/methods on mount
-//   - Renders a radio-button selector for each method
-//   - Sends selected payment_method_id with the order POST request
-//   - COD → order immediately goes to PAID (confirmed by backend)
-//   - Bank Transfer / Tele Birr → order goes to PENDING_PAYMENT (admin confirms later)
-//   - Shows the user a clear message explaining what happens next
-//
-// Everything else (address selector, cart items, quantity, totals) is unchanged.
+// - Fetches available payment methods from GET /api/payments/methods on mount
+// - Renders a radio-button selector for each method
+// - Sends selected payment_method_id with the order POST request
+// - COD -> order immediately goes to PAID (confirmed by backend)
+// - Bank Transfer / Tele Birr -> order goes to PENDING_PAYMENT (admin confirms later)
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -263,7 +257,7 @@ const Cart = () => {
               </div>
             </div>
 
-            {/* ── Payment method selection (Phase 3 Part 1) ── */}
+            {/* ── Payment method selection ── */}
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-50">
                 <h2 className="font-semibold text-gray-900">Payment method</h2>

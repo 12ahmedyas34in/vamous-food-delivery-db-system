@@ -1,8 +1,4 @@
 // frontend/src/components/Header.jsx
-//
-// Phase 3 Part 1 change: <Link> → <NavLink> on nav links and auth buttons.
-// NavLink receives an isActive boolean from React Router and applies the
-// active class automatically. Everything else is unchanged from Phase 0.
 
 import React, { useState, useEffect } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
@@ -30,6 +26,10 @@ const Header = () => {
   const [scrolled,   setScrolled]   = useState(false);
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('token'));
+  const [userRole,   setUserRole]   = useState(() => {
+    try { return JSON.parse(localStorage.getItem('user') || '{}').role || ''; }
+    catch { return ''; }
+  });
   const navigate = useNavigate();
 
   // Scroll-aware shadow
@@ -41,7 +41,11 @@ const Header = () => {
 
   // Same-tab auth sync via custom event (dispatched by Login.js and Register.js)
   useEffect(() => {
-    const syncAuth = () => setIsLoggedIn(!!localStorage.getItem('token'));
+    const syncAuth = () => {
+      setIsLoggedIn(!!localStorage.getItem('token'));
+      try { setUserRole(JSON.parse(localStorage.getItem('user') || '{}').role || ''); }
+      catch { setUserRole(''); }
+    };
     window.addEventListener('storage',     syncAuth);
     window.addEventListener('auth-change', syncAuth);
     return () => {
@@ -98,6 +102,12 @@ const Header = () => {
           <div className="hidden md:flex items-center gap-3">
             {isLoggedIn ? (
               <>
+                {userRole === 'admin' && (
+                  <NavLink to="/admin" className={navLinkClass}>Admin Dashboard</NavLink>
+                )}
+                {userRole === 'restaurant_owner' && (
+                  <NavLink to="/owner/dashboard" className={navLinkClass}>My Restaurant</NavLink>
+                )}
                 <NavLink to="/orders" className={navLinkClass}>My orders</NavLink>
                 <NavLink
                   to="/restaurants"
@@ -168,6 +178,25 @@ const Header = () => {
           <div className="border-t border-gray-100 mt-2 pt-3 flex gap-3">
             {isLoggedIn ? (
               <>
+                {userRole === 'admin' && (
+                  <NavLink
+                    to="/admin"
+                    onClick={() => setMenuOpen(false)}
+                    className={mobileNavLinkClass}
+                  >
+                    Admin Dashboard
+                  </NavLink>
+                )}
+                {userRole === 'restaurant_owner' && (
+                  <NavLink
+                    to="/owner/dashboard"
+                    onClick={() => setMenuOpen(false)}
+                    className={mobileNavLinkClass}
+                  >
+                    My Restaurant
+                  </NavLink>
+                )}
+                <div className="flex gap-3 mt-1">
                 <NavLink
                   to="/orders"
                   onClick={() => setMenuOpen(false)}
@@ -188,6 +217,7 @@ const Header = () => {
                 >
                   Logout
                 </button>
+                </div>
               </>
             ) : (
               <>
