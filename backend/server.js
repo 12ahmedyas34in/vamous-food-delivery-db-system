@@ -1,6 +1,12 @@
 // backend/server.js
-const express = require('express');
-const cors    = require('cors');
+//
+// Phase 3 Push 4 changes:
+//   - cookie-parser added (required for req.cookies.token in authMiddleware)
+//   - CORS hardened: origin restricted to FRONTEND_URL, credentials: true
+
+const express      = require('express');
+const cors         = require('cors');
+const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
 const { sequelize, connectDB } = require('./config/db');
@@ -8,40 +14,47 @@ const logger        = require('./config/logger');
 const requestLogger = require('./middleware/requestLogger');
 const errorHandler  = require('./middleware/errorHandler');
 
-const authRoutes          = require('./routes/authRoutes');
-const restaurantRoutes    = require('./routes/restaurantRoutes');
-const menuRoutes          = require('./routes/menuRoutes');
-const cartRoutes          = require('./routes/cartRoutes');
-const orderRoutes         = require('./routes/orderRoutes');
-const paymentRoutes       = require('./routes/paymentRoutes');
-const driverRoutes        = require('./routes/driverRoutes');
-const addressRoutes       = require('./routes/addressRoutes');
-const uploadRoutes        = require('./routes/uploadRoutes');
-const applicationRoutes   = require('./routes/applicationRoutes');
-const adminRoutes         = require('./routes/adminRoutes');
+const authRoutes        = require('./routes/authRoutes');
+const restaurantRoutes  = require('./routes/restaurantRoutes');
+const menuRoutes        = require('./routes/menuRoutes');
+const cartRoutes        = require('./routes/cartRoutes');
+const orderRoutes       = require('./routes/orderRoutes');
+const paymentRoutes     = require('./routes/paymentRoutes');
+const driverRoutes      = require('./routes/driverRoutes');
+const addressRoutes     = require('./routes/addressRoutes');
+const uploadRoutes      = require('./routes/uploadRoutes');
+const applicationRoutes = require('./routes/applicationRoutes');
+const adminRoutes       = require('./routes/adminRoutes');
 
 const app = express();
 
 // 1. FRONT DOOR LOGGER
-app.use(requestLogger);   // Must be the first middleware
+app.use(requestLogger);
 
-app.use(cors());
+// 2. CORS — strict in production, open in development
+app.use(cors({
+  origin:      process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true,   // required for cookies to be sent cross-origin
+}));
+
+// 3. BODY + COOKIE PARSERS
 app.use(express.json());
+app.use(cookieParser());   // Phase 3 Push 4 — must come before route handlers
 
-// 2. MOUNT ALL ROUTES
-app.use('/api/auth',          authRoutes);
-app.use('/api/restaurants',   restaurantRoutes);
-app.use('/api/menu-items',    menuRoutes);
-app.use('/api/cart',          cartRoutes);
-app.use('/api/orders',        orderRoutes);
-app.use('/api/payments',      paymentRoutes);
-app.use('/api/drivers',       driverRoutes);
-app.use('/api/addresses',     addressRoutes);
-app.use('/api/upload',        uploadRoutes);
-app.use('/api/applications',  applicationRoutes);
-app.use('/api/admin',         adminRoutes);
+// 4. MOUNT ALL ROUTES
+app.use('/api/auth',         authRoutes);
+app.use('/api/restaurants',  restaurantRoutes);
+app.use('/api/menu-items',   menuRoutes);
+app.use('/api/cart',         cartRoutes);
+app.use('/api/orders',       orderRoutes);
+app.use('/api/payments',     paymentRoutes);
+app.use('/api/drivers',      driverRoutes);
+app.use('/api/addresses',    addressRoutes);
+app.use('/api/upload',       uploadRoutes);
+app.use('/api/applications', applicationRoutes);
+app.use('/api/admin',        adminRoutes);
 
-// 3. HEALTH CHECK
+// 5. HEALTH CHECK
 app.get('/api/health', async (req, res) => {
   try {
     await sequelize.authenticate();
@@ -51,7 +64,7 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// 4. SAFETY NET ERROR HANDLER
+// 6. SAFETY NET ERROR HANDLER
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;

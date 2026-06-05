@@ -1,5 +1,10 @@
 // backend/middleware/authMiddleware.js
-const jwt = require('jsonwebtoken');
+//
+// Phase 3 Push 4: reads JWT from httpOnly cookie first.
+// Authorization header kept as fallback so existing Postman collections
+// and curl tests continue to work during transition.
+
+const jwt    = require('jsonwebtoken');
 const { User } = require('../models');
 const { errorResponse } = require('../utils/response');
 const logger = require('../config/logger');
@@ -8,7 +13,12 @@ exports.protect = async (req, res, next) => {
   try {
     let token;
 
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    // 1. Cookie (primary — Push 4 path)
+    if (req.cookies && req.cookies.token) {
+      token = req.cookies.token;
+    }
+    // 2. Authorization header (fallback — keeps Postman/curl working)
+    else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
     }
 
@@ -18,22 +28,19 @@ exports.protect = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // ✅ P3: Retrieve ONLY needed fields, exclude sensitive data
     const user = await User.findByPk(decoded.id, {
-      attributes: ['id', 'full_name', 'email', 'role']
+      attributes: ['id', 'full_name', 'email', 'role'],
     });
 
     if (!user) {
       return errorResponse(res, 'User not found. Invalid token.', 401);
     }
 
-    // ✅ P3: Normalize payload — map full_name → name
-    // ✅ P3: Freeze to prevent mutation
     req.user = Object.freeze({
-      id: user.id,
-      name: user.full_name,
+      id:    user.id,
+      name:  user.full_name,
       email: user.email,
-      role: user.role
+      role:  user.role,
     });
 
     if (process.env.NODE_ENV === 'development') {

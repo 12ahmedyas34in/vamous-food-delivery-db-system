@@ -1,10 +1,16 @@
 // frontend/src/components/Header.jsx
+//
+// Phase 3 Push 4 change:
+//   handleLogout now calls POST /api/auth/logout to clear the httpOnly cookie
+//   before removing the user object from localStorage.
+//   isLoggedIn now checks localStorage 'user' key (token no longer stored).
+//   Role-based nav links (Admin Dashboard, My Restaurant) carried forward from Push 3.
 
 import React, { useState, useEffect } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
+import axios from '../api/axios';
 
 // ── NavLink className helpers ─────────────────────────────────────────────────
-// Desktop nav link — underline animates in when active
 const navLinkClass = ({ isActive }) => [
   'text-sm font-body font-medium transition-colors duration-200',
   'relative after:absolute after:bottom-[-2px] after:left-0',
@@ -14,7 +20,6 @@ const navLinkClass = ({ isActive }) => [
     : 'text-gray-600 hover:text-brand-500 after:w-0 hover:after:w-full',
 ].join(' ');
 
-// Mobile nav link — background highlight when active
 const mobileNavLinkClass = ({ isActive }) => [
   'py-2.5 px-3 rounded-lg text-sm font-medium transition-colors duration-150',
   isActive
@@ -25,24 +30,22 @@ const mobileNavLinkClass = ({ isActive }) => [
 const Header = () => {
   const [scrolled,   setScrolled]   = useState(false);
   const [menuOpen,   setMenuOpen]   = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('token'));
+  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('user'));
   const [userRole,   setUserRole]   = useState(() => {
     try { return JSON.parse(localStorage.getItem('user') || '{}').role || ''; }
     catch { return ''; }
   });
   const navigate = useNavigate();
 
-  // Scroll-aware shadow
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Same-tab auth sync via custom event (dispatched by Login.js and Register.js)
   useEffect(() => {
     const syncAuth = () => {
-      setIsLoggedIn(!!localStorage.getItem('token'));
+      setIsLoggedIn(!!localStorage.getItem('user'));
       try { setUserRole(JSON.parse(localStorage.getItem('user') || '{}').role || ''); }
       catch { setUserRole(''); }
     };
@@ -54,11 +57,20 @@ const Header = () => {
     };
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    window.dispatchEvent(new Event('auth-change'));
-    navigate('/login');
+  // Phase 3 Push 4: calls /api/auth/logout to clear the httpOnly cookie,
+  // then clears localStorage and redirects. Fire-and-forget on the API call —
+  // we always clear localStorage and redirect even if the request fails,
+  // because the worst case is an orphaned cookie that expires naturally.
+  const handleLogout = async () => {
+    try {
+      await axios.post('/auth/logout');
+    } catch {
+      // Non-fatal — proceed with local cleanup regardless
+    } finally {
+      localStorage.removeItem('user');
+      window.dispatchEvent(new Event('auth-change'));
+      navigate('/login');
+    }
   };
 
   const navLinks = [
@@ -175,7 +187,7 @@ const Header = () => {
               {link.label}
             </NavLink>
           ))}
-          <div className="border-t border-gray-100 mt-2 pt-3 flex gap-3">
+          <div className="border-t border-gray-100 mt-2 pt-3 flex flex-col gap-1">
             {isLoggedIn ? (
               <>
                 {userRole === 'admin' && (
@@ -197,30 +209,30 @@ const Header = () => {
                   </NavLink>
                 )}
                 <div className="flex gap-3 mt-1">
-                <NavLink
-                  to="/orders"
-                  onClick={() => setMenuOpen(false)}
-                  className={({ isActive }) => [
-                    'flex-1 text-center py-2 rounded-full text-sm font-medium',
-                    'border border-brand-300 transition-colors duration-150',
-                    isActive
-                      ? 'bg-brand-50 text-brand-600 border-brand-400'
-                      : 'text-brand-500 hover:bg-brand-50',
-                  ].join(' ')}
-                >
-                  My orders
-                </NavLink>
-                <button
-                  onClick={() => { setMenuOpen(false); handleLogout(); }}
-                  className="flex-1 text-center py-2 rounded-full text-sm font-medium
-                    bg-gray-900 text-white hover:bg-gray-800 transition-colors"
-                >
-                  Logout
-                </button>
+                  <NavLink
+                    to="/orders"
+                    onClick={() => setMenuOpen(false)}
+                    className={({ isActive }) => [
+                      'flex-1 text-center py-2 rounded-full text-sm font-medium',
+                      'border border-brand-300 transition-colors duration-150',
+                      isActive
+                        ? 'bg-brand-50 text-brand-600 border-brand-400'
+                        : 'text-brand-500 hover:bg-brand-50',
+                    ].join(' ')}
+                  >
+                    My orders
+                  </NavLink>
+                  <button
+                    onClick={() => { setMenuOpen(false); handleLogout(); }}
+                    className="flex-1 text-center py-2 rounded-full text-sm font-medium
+                      bg-gray-900 text-white hover:bg-gray-800 transition-colors"
+                  >
+                    Logout
+                  </button>
                 </div>
               </>
             ) : (
-              <>
+              <div className="flex gap-3">
                 <NavLink
                   to="/login"
                   onClick={() => setMenuOpen(false)}
@@ -246,7 +258,7 @@ const Header = () => {
                 >
                   Sign up
                 </NavLink>
-              </>
+              </div>
             )}
           </div>
         </div>
