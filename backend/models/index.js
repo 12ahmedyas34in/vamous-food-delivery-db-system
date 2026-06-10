@@ -1,191 +1,438 @@
+// backend/models/index.js
+
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
 
-// 1. USER MODEL
+// ══════════════════════════════════════════════════════════════════════════════
+// 1. USERS
+// ══════════════════════════════════════════════════════════════════════════════
 const User = sequelize.define('User', {
-  name: { type: DataTypes.STRING, allowNull: false },
-  email: { type: DataTypes.STRING, allowNull: false, unique: true },
-  password: { type: DataTypes.STRING, allowNull: false },
-  role: { type: DataTypes.ENUM('customer', 'admin', 'restaurant_owner', 'driver'), defaultValue: 'customer' },
-  restaurant_id: { type: DataTypes.INTEGER, allowNull: true }
-
-}, { tableName: 'users', timestamps: false, indexes: [{ unique: true, fields: ['email'] }] });
-
-// 2. RESTAURANT MODEL
-const Restaurant = sequelize.define('Restaurant', {
-  name: { type: DataTypes.STRING, allowNull: false },
-  address: { type: DataTypes.STRING, allowNull: false },
-  is_active: { type: DataTypes.BOOLEAN, defaultValue: true }
-}, {
-  tableName: 'restaurants',
-  timestamps: false
-});
-
-// 3. MENU ITEM MODEL (Added Index for restaurant_id)
-const MenuItem = sequelize.define('MenuItem', {
-  name: { type: DataTypes.STRING, allowNull: false },
-  price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
-  is_available: { type: DataTypes.BOOLEAN, defaultValue: true }
-}, {
-  tableName: 'menu_items',
-  timestamps: false,
-  indexes: [{ fields: ['restaurant_id'] }]
-});
-
-// 4. ORDER MODEL
-const Order = sequelize.define('Order', {
-  total_price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
-  status: {
-    type: DataTypes.ENUM('PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY', 'COMPLETED', 'CANCELLED'),
-    defaultValue: 'PENDING'
-  },
-  delivery_address: { type: DataTypes.STRING, allowNull: false }
-}, {
-  tableName: 'orders',
-  timestamps: true,
-  indexes: [
-    { fields: ['user_id'] },
-    { fields: ['restaurant_id'] },
-    { fields: ['driver_id'] }
-  ]
-});
-
-// 5. ORDER ITEM MODEL (Added Indexes for order_id and menu_item_id)
-const OrderItem = sequelize.define('OrderItem', {
-  quantity: { type: DataTypes.INTEGER, allowNull: false },
-  price: { type: DataTypes.DECIMAL(10, 2), allowNull: false }
-}, {
-  tableName: 'order_items',
-  timestamps: false,
-  indexes: [
-    { fields: ['order_id'] },
-    { fields: ['menu_item_id'] }
-  ]
-});
-
-// 6. ORDER STATUS HISTORY MODEL (Converted to ENUM & Added Index)
-const OrderStatusHistory = sequelize.define('OrderStatusHistory', {
-  status: {
-    type: DataTypes.ENUM('PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY', 'COMPLETED', 'CANCELLED'),
-    allowNull: false
-  }
-}, {
-  tableName: 'order_status_history',
-  timestamps: true,
-  indexes: [{ fields: ['order_id'] }]
-});
-
-// 7. DRIVER MODEL (Added Unique Index for user_id)
-const Driver = sequelize.define('Driver', {
-  license_number: { type: DataTypes.STRING, allowNull: false },
-  is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
-  is_available: { type: DataTypes.BOOLEAN, defaultValue: true }
-}, {
-  tableName: 'drivers',
-  timestamps: false,
-  indexes: [{ unique: true, fields: ['user_id'] }]
-});
-
-// 8. CART ITEM MODEL (Enterprise Upgraded)
-const CartItem = sequelize.define('CartItem', {
-  quantity: {
-    type: DataTypes.INTEGER,
+  id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  email:         { type: DataTypes.STRING(255), allowNull: false, unique: true },
+  password_hash: { type: DataTypes.STRING(255), allowNull: false },
+  full_name:     { type: DataTypes.STRING(100), allowNull: false },
+  phone:         { type: DataTypes.STRING(20),  allowNull: false },
+  role: {
+    type: DataTypes.ENUM('customer', 'restaurant_owner', 'driver', 'admin'),
     allowNull: false,
-    defaultValue: 1
-  }
+    defaultValue: 'customer',
+  },
+  deleted_at: { type: DataTypes.DATE, allowNull: true },
 }, {
-  tableName: 'cart_items',
+  tableName:  'users',
   timestamps: true,
-  indexes: [
-    { unique: true, fields: ['user_id', 'menu_item_id'] }, // PREVENTS DUPLICATE ROWS!
-    { fields: ['user_id'] },
-    { fields: ['menu_item_id'] }
-  ]
+  createdAt:  'created_at',
+  updatedAt:  false,
 });
 
-// 9. PAYMENT MODEL (Day 6 - Retry-Friendly)
-const Payment = sequelize.define('Payment', {
+// ══════════════════════════════════════════════════════════════════════════════
+// 2. DRIVERS (ISA specialization of users)
+// Added is_active (defaultValue: false) for pending-activation
+// pattern. New driver applications are created inactive until admin approves.
+// ══════════════════════════════════════════════════════════════════════════════
+const Driver = sequelize.define('Driver', {
+  user_id: {
+    type:       DataTypes.INTEGER,
+    primaryKey: true,
+    references: { model: 'users', key: 'id' },
+  },
+  vehicle_type:         { type: DataTypes.STRING(50),    allowNull: true },
+  license_number:       { type: DataTypes.STRING(50),    allowNull: false },
+  is_available:         { type: DataTypes.BOOLEAN,       defaultValue: true },
+  is_active:            { type: DataTypes.BOOLEAN,       defaultValue: false },
+  current_lat:          { type: DataTypes.DECIMAL(10, 8), allowNull: true },
+  current_lng:          { type: DataTypes.DECIMAL(11, 8), allowNull: true },
+  last_location_update: { type: DataTypes.DATE,          allowNull: true },
+}, {
+  tableName:  'drivers',
+  timestamps: false,
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3. ADDRESSES
+// ══════════════════════════════════════════════════════════════════════════════
+const Address = sequelize.define('Address', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  user_id: {
+    type:       DataTypes.INTEGER,
+    allowNull:  false,
+    references: { model: 'users', key: 'id' },
+  },
+  street:      { type: DataTypes.STRING(255),    allowNull: false },
+  city:        { type: DataTypes.STRING(100),    allowNull: false },
+  postal_code: { type: DataTypes.STRING(20),     allowNull: true },
+  latitude:    { type: DataTypes.DECIMAL(10, 8), allowNull: true },
+  longitude:   { type: DataTypes.DECIMAL(11, 8), allowNull: true },
+  is_default:  { type: DataTypes.BOOLEAN,        defaultValue: false },
+}, {
+  tableName:  'addresses',
+  timestamps: false,
+  indexes: [
+    { fields: ['user_id'] },
+  ],
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 4. CUISINE_TYPES
+// ══════════════════════════════════════════════════════════════════════════════
+const CuisineType = sequelize.define('CuisineType', {
+  id:        { type: DataTypes.INTEGER,    primaryKey: true, autoIncrement: true },
+  type_name: { type: DataTypes.STRING(50), allowNull: false, unique: true },
+}, {
+  tableName:  'cuisine_types',
+  timestamps: false,
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 5. RESTAURANTS
+// ══════════════════════════════════════════════════════════════════════════════
+const Restaurant = sequelize.define('Restaurant', {
+  id:       { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  owner_id: { type: DataTypes.INTEGER, allowNull: false },
+  name:         { type: DataTypes.STRING(100), allowNull: false },
+  description:  { type: DataTypes.TEXT,        allowNull: true },
+  image_url:    { type: DataTypes.STRING(255),  allowNull: true },
+  address:      { type: DataTypes.STRING(255),  allowNull: false },
+  phone:        { type: DataTypes.STRING(20),   allowNull: false },
+  delivery_fee: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
+  estimated_time: { type: DataTypes.INTEGER,    allowNull: true },
+  is_active:    { type: DataTypes.BOOLEAN,      defaultValue: true },
+  deleted_at:   { type: DataTypes.DATE,         allowNull: true },
+}, {
+  tableName:  'restaurants',
+  timestamps: true,
+  createdAt:  'created_at',
+  updatedAt:  false,
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 6. RESTAURANT_CUISINES (M:N junction)
+// ══════════════════════════════════════════════════════════════════════════════
+const RestaurantCuisine = sequelize.define('RestaurantCuisine', {
+  restaurant_id: {
+    type:       DataTypes.INTEGER,
+    primaryKey: true,
+    references: { model: 'restaurants', key: 'id' },
+  },
+  cuisine_id: {
+    type:       DataTypes.INTEGER,
+    primaryKey: true,
+    references: { model: 'cuisine_types', key: 'id' },
+  },
+}, {
+  tableName:  'restaurant_cuisines',
+  timestamps: false,
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 7. OPERATING_HOURS
+// ══════════════════════════════════════════════════════════════════════════════
+const OperatingHour = sequelize.define('OperatingHour', {
+  restaurant_id: {
+    type:       DataTypes.INTEGER,
+    primaryKey: true,
+    references: { model: 'restaurants', key: 'id' },
+  },
+  day_of_week: {
+    type: DataTypes.ENUM(
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+      'Friday', 'Saturday', 'Sunday'
+    ),
+    primaryKey: true,
+    allowNull:  false,
+  },
+  open_time:  { type: DataTypes.TIME, allowNull: false },
+  close_time: { type: DataTypes.TIME, allowNull: false },
+}, {
+  tableName:  'operating_hours',
+  timestamps: false,
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 8. MENU_CATEGORIES
+// ══════════════════════════════════════════════════════════════════════════════
+const MenuCategory = sequelize.define('MenuCategory', {
+  id:            { type: DataTypes.INTEGER,   primaryKey: true, autoIncrement: true },
+  restaurant_id: { type: DataTypes.INTEGER,   allowNull: false },
+  category_name: { type: DataTypes.STRING(50), allowNull: false },
+  display_order: { type: DataTypes.INTEGER,   defaultValue: 0 },
+}, {
+  tableName:  'menu_categories',
+  timestamps: false,
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 9. MENU_ITEMS
+// ══════════════════════════════════════════════════════════════════════════════
+const MenuItem = sequelize.define('MenuItem', {
+  id:            { type: DataTypes.INTEGER,     primaryKey: true, autoIncrement: true },
+  restaurant_id: { type: DataTypes.INTEGER,     allowNull: false },
+  category_id:   { type: DataTypes.INTEGER,     allowNull: false },
+  item_name:     { type: DataTypes.STRING(100), allowNull: false },
+  description:   { type: DataTypes.TEXT,        allowNull: true },
+  price:         { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  stock_quantity: { type: DataTypes.INTEGER,    defaultValue: 999 },
+  is_available:  { type: DataTypes.BOOLEAN,     defaultValue: true },
+  image_url:     { type: DataTypes.STRING(255), allowNull: true },
+  deleted_at:    { type: DataTypes.DATE,        allowNull: true },
+}, {
+  tableName:  'menu_items',
+  timestamps: false,
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 10. PAYMENT_METHODS
+// ══════════════════════════════════════════════════════════════════════════════
+const PaymentMethod = sequelize.define('PaymentMethod', {
+  id:          { type: DataTypes.INTEGER,    primaryKey: true, autoIncrement: true },
+  method_name: { type: DataTypes.STRING(50), allowNull: false, unique: true },
+}, {
+  tableName:  'payment_methods',
+  timestamps: false,
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 11. ORDERS
+// ══════════════════════════════════════════════════════════════════════════════
+const Order = sequelize.define('Order', {
+  id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  user_id:       { type: DataTypes.INTEGER, allowNull: false },
+  restaurant_id: { type: DataTypes.INTEGER, allowNull: false },
+  address_id:    { type: DataTypes.INTEGER, allowNull: false },
+  driver_id:     { type: DataTypes.INTEGER, allowNull: true },
+  status: {
+    type: DataTypes.ENUM(
+      'PENDING', 'PENDING_PAYMENT', 'PAID', 'CONFIRMED',
+      'PREPARING', 'READY', 'OUT_FOR_DELIVERY', 'COMPLETED', 'CANCELLED'
+    ),
+    allowNull:    false,
+    defaultValue: 'PENDING',
+  },
+  subtotal:         { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  tax:              { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
+  delivery_fee:     { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  discount_amount:  { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
+  total_amount:     { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  special_instructions: { type: DataTypes.TEXT, allowNull: true },
+}, {
+  tableName:  'orders',
+  timestamps: true,
+  createdAt:  'created_at',
+  updatedAt:  false,
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 12. ORDER_ITEMS
+// ══════════════════════════════════════════════════════════════════════════════
+const OrderItem = sequelize.define('OrderItem', {
   order_id: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-    // unique: true is REMOVED so users can retry failed payments!
+    type:       DataTypes.INTEGER,
+    primaryKey: true,
+    references: { model: 'orders', key: 'id' },
+  },
+  line_no: {
+    type:       DataTypes.INTEGER,
+    primaryKey: true,
+  },
+  menu_item_id:         { type: DataTypes.INTEGER,      allowNull: false },
+  quantity:             { type: DataTypes.INTEGER,      allowNull: false },
+  unit_price:           { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  special_instructions: { type: DataTypes.TEXT,         allowNull: true },
+}, {
+  tableName:  'order_items',
+  timestamps: false,
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 13. ORDER_STATUS_HISTORY
+// ══════════════════════════════════════════════════════════════════════════════
+const OrderStatusHistory = sequelize.define('OrderStatusHistory', {
+  order_id: {
+    type:       DataTypes.INTEGER,
+    primaryKey: true,
+    references: { model: 'orders', key: 'id' },
+  },
+  updated_at: {
+    type:         DataTypes.DATE,
+    primaryKey:   true,
+    defaultValue: DataTypes.NOW,
+  },
+  status_name: {
+    type: DataTypes.ENUM(
+      'PENDING', 'PENDING_PAYMENT', 'PAID', 'CONFIRMED',
+      'PREPARING', 'READY', 'OUT_FOR_DELIVERY', 'COMPLETED', 'CANCELLED'
+    ),
+    allowNull: false,
+  },
+  actor_user_id: { type: DataTypes.INTEGER, allowNull: false },
+  notes:         { type: DataTypes.TEXT,    allowNull: true },
+}, {
+  tableName:  'order_status_history',
+  timestamps: false,
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 14. PAYMENTS
+// ══════════════════════════════════════════════════════════════════════════════
+const Payment = sequelize.define('Payment', {
+  id:       { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  order_id: {
+    type:      DataTypes.INTEGER,
+    allowNull: false,
+    unique:    true,
+  },
+  payment_method_id: {
+    type:       DataTypes.INTEGER,
+    allowNull:  false,
+    references: { model: 'payment_methods', key: 'id' },
   },
   amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
   status: {
-    type: DataTypes.ENUM('pending', 'completed', 'failed'),
-    defaultValue: 'pending'
+    type: DataTypes.ENUM('pending', 'completed', 'failed', 'refunded'),
+    allowNull:    false,
+    defaultValue: 'pending',
   },
-  payment_method: { type: DataTypes.STRING, defaultValue: 'simulated' }
-}, { tableName: 'payments', timestamps: true });
+  transaction_id: { type: DataTypes.STRING(100), allowNull: true },
+  paid_at:        { type: DataTypes.DATE,        allowNull: true },
+}, {
+  tableName:  'payments',
+  timestamps: true,
+  createdAt:  'created_at',
+  updatedAt:  false,
+});
 
-
-// ==========================================
-// STRICT RELATIONSHIPS (allowNull: false)
-// ==========================================
-
-User.hasMany(Order, { foreignKey: { name: 'user_id', allowNull: false } });
-Order.belongsTo(User, { foreignKey: { name: 'user_id', allowNull: false } });
-
-Restaurant.hasMany(Order, { foreignKey: { name: 'restaurant_id', allowNull: false } });
-Order.belongsTo(Restaurant, { foreignKey: { name: 'restaurant_id', allowNull: false } });
-
-Order.hasMany(OrderItem, { foreignKey: { name: 'order_id', allowNull: false } });
-OrderItem.belongsTo(Order, { foreignKey: { name: 'order_id', allowNull: false } });
-
-MenuItem.hasMany(OrderItem, { foreignKey: { name: 'menu_item_id', allowNull: false } });
-OrderItem.belongsTo(MenuItem, { foreignKey: { name: 'menu_item_id', allowNull: false } });
-
-Order.hasMany(OrderStatusHistory, { foreignKey: { name: 'order_id', allowNull: false } });
-OrderStatusHistory.belongsTo(Order, { foreignKey: { name: 'order_id', allowNull: false } });
-
-// Driver is optional on Order, so allowNull is true here
-Driver.hasMany(Order, { foreignKey: { name: 'driver_id', allowNull: true } });
-Order.belongsTo(Driver, { foreignKey: { name: 'driver_id', allowNull: true } });
-
-// Driver MUST have a User
-User.hasOne(Driver, { foreignKey: { name: 'user_id', allowNull: false } });
-Driver.belongsTo(User, { foreignKey: { name: 'user_id', allowNull: false } });
-
-Restaurant.hasMany(MenuItem, { foreignKey: { name: 'restaurant_id', allowNull: false } });
-MenuItem.belongsTo(Restaurant, { foreignKey: { name: 'restaurant_id', allowNull: false } });
-
-// CART ITEM RELATIONSHIPS
-User.hasMany(CartItem, { foreignKey: { name: 'user_id', allowNull: false } });
-CartItem.belongsTo(User, { foreignKey: { name: 'user_id', allowNull: false } });
-
-MenuItem.hasMany(CartItem, { foreignKey: { name: 'menu_item_id', allowNull: false } });
-CartItem.belongsTo(MenuItem, { foreignKey: { name: 'menu_item_id', allowNull: false } });
-
-// PAYMENT RELATIONSHIPS (Allowing multiple retries)
-Order.hasMany(Payment, { foreignKey: { name: 'order_id', allowNull: false } });
-Payment.belongsTo(Order, { foreignKey: { name: 'order_id', allowNull: false } });
-
-// 👉 ADD THESE TWO NEW LINES:
-Restaurant.hasMany(User, { foreignKey: 'restaurant_id' });
-User.belongsTo(Restaurant, { foreignKey: 'restaurant_id' });
-
-// 10. REVIEW MODEL
+// ══════════════════════════════════════════════════════════════════════════════
+// 15. REVIEWS
+// ══════════════════════════════════════════════════════════════════════════════
 const Review = sequelize.define('Review', {
-  rating: {
-    type: DataTypes.INTEGER,
+  id:       { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  order_id: {
+    type:      DataTypes.INTEGER,
     allowNull: false,
-    validate: { min: 1, max: 5 },
+    unique:    true,
   },
-  comment: {
-    type: DataTypes.TEXT,
-    allowNull: true,
+  rating: {
+    type:      DataTypes.INTEGER,
+    allowNull: false,
+    validate:  { min: 1, max: 5 },
   },
+  comment: { type: DataTypes.TEXT, allowNull: true },
 }, {
   tableName:  'reviews',
   timestamps: true,
-  indexes: [{ fields: ['order_id'] }],
+  createdAt:  'created_at',
+  updatedAt:  false,
 });
 
-Order.hasOne(Review, {
-  foreignKey: { name: 'order_id', allowNull: false, unique: true },
-});
-Review.belongsTo(Order, {
-  foreignKey: { name: 'order_id', allowNull: false, unique: true },
+// ══════════════════════════════════════════════════════════════════════════════
+// 16. CART_ITEMS
+// ══════════════════════════════════════════════════════════════════════════════
+const CartItem = sequelize.define('CartItem', {
+  id:           { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  user_id:      { type: DataTypes.INTEGER, allowNull: false },
+  menu_item_id: { type: DataTypes.INTEGER, allowNull: false },
+  quantity:     { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+}, {
+  tableName:  'cart_items',
+  timestamps: true,
+  createdAt:  'created_at',
+  updatedAt:  'updated_at',
+  indexes: [
+    { unique: true, fields: ['user_id', 'menu_item_id'] },
+  ],
 });
 
-module.exports = { sequelize, User, Restaurant, MenuItem, Order, OrderItem, OrderStatusHistory, Driver, CartItem, Payment, Review };
+// ══════════════════════════════════════════════════════════════════════════════
+// ASSOCIATIONS
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── users ─────────────────────────────────────────────────────────────────────
+User.hasOne(Driver,   { foreignKey: 'user_id', onDelete: 'CASCADE' });
+Driver.belongsTo(User, { foreignKey: 'user_id' });
+
+User.hasMany(Address,  { foreignKey: 'user_id' });
+Address.belongsTo(User, { foreignKey: 'user_id' });
+
+User.hasMany(Order,    { foreignKey: 'user_id' });
+Order.belongsTo(User,  { foreignKey: 'user_id' });
+
+User.hasMany(Restaurant,      { foreignKey: 'owner_id', as: 'OwnedRestaurants' });
+Restaurant.belongsTo(User,    { foreignKey: 'owner_id', as: 'Owner' });
+
+User.hasMany(OrderStatusHistory,         { foreignKey: 'actor_user_id' });
+OrderStatusHistory.belongsTo(User,       { foreignKey: 'actor_user_id', as: 'Actor' });
+
+User.hasMany(CartItem,   { foreignKey: 'user_id' });
+CartItem.belongsTo(User, { foreignKey: 'user_id' });
+
+// ── restaurants ───────────────────────────────────────────────────────────────
+Restaurant.hasMany(MenuCategory,    { foreignKey: 'restaurant_id' });
+MenuCategory.belongsTo(Restaurant,  { foreignKey: 'restaurant_id' });
+
+Restaurant.hasMany(MenuItem,    { foreignKey: 'restaurant_id' });
+MenuItem.belongsTo(Restaurant,  { foreignKey: 'restaurant_id' });
+
+Restaurant.hasMany(OperatingHour,    { foreignKey: 'restaurant_id' });
+OperatingHour.belongsTo(Restaurant,  { foreignKey: 'restaurant_id' });
+
+// M:N — restaurants ↔ cuisine_types via restaurant_cuisines junction
+Restaurant.belongsToMany(CuisineType, {
+  through:     RestaurantCuisine,
+  foreignKey:  'restaurant_id',
+  as:          'Cuisines',
+});
+CuisineType.belongsToMany(Restaurant, {
+  through:     RestaurantCuisine,
+  foreignKey:  'cuisine_id',
+  as:          'Restaurants',
+});
+
+Restaurant.hasMany(Order,    { foreignKey: 'restaurant_id' });
+Order.belongsTo(Restaurant,  { foreignKey: 'restaurant_id' });
+
+// ── menu_categories ───────────────────────────────────────────────────────────
+MenuCategory.hasMany(MenuItem,    { foreignKey: 'category_id' });
+MenuItem.belongsTo(MenuCategory,  { foreignKey: 'category_id', as: 'Category' });
+
+// ── orders ────────────────────────────────────────────────────────────────────
+Order.belongsTo(Address,  { foreignKey: 'address_id', as: 'DeliveryAddress' });
+Address.hasMany(Order,    { foreignKey: 'address_id' });
+
+Order.belongsTo(Driver,   { foreignKey: 'driver_id', as: 'AssignedDriver' });
+Driver.hasMany(Order,     { foreignKey: 'driver_id' });
+
+Order.hasMany(OrderItem,      { foreignKey: 'order_id' });
+OrderItem.belongsTo(Order,    { foreignKey: 'order_id' });
+
+OrderItem.belongsTo(MenuItem, { foreignKey: 'menu_item_id' });
+MenuItem.hasMany(OrderItem,   { foreignKey: 'menu_item_id' });
+
+Order.hasMany(OrderStatusHistory,      { foreignKey: 'order_id' });
+OrderStatusHistory.belongsTo(Order,    { foreignKey: 'order_id' });
+
+Order.hasOne(Payment,      { foreignKey: 'order_id' });
+Payment.belongsTo(Order,   { foreignKey: 'order_id' });
+
+Order.hasOne(Review,       { foreignKey: 'order_id' });
+Review.belongsTo(Order,    { foreignKey: 'order_id' });
+
+// ── payment_methods ───────────────────────────────────────────────────────────
+PaymentMethod.hasMany(Payment,    { foreignKey: 'payment_method_id' });
+Payment.belongsTo(PaymentMethod,  { foreignKey: 'payment_method_id', as: 'Method' });
+
+// ── cart_items ────────────────────────────────────────────────────────────────
+CartItem.belongsTo(MenuItem, { foreignKey: 'menu_item_id' });
+MenuItem.hasMany(CartItem,   { foreignKey: 'menu_item_id' });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EXPORTS
+// ══════════════════════════════════════════════════════════════════════════════
+module.exports = {
+  sequelize,
+  User, Driver, Address,
+  CuisineType, Restaurant, RestaurantCuisine, OperatingHour,
+  MenuCategory, MenuItem,
+  PaymentMethod,
+  Order, OrderItem, OrderStatusHistory,
+  Payment, Review, CartItem,
+};

@@ -5,7 +5,7 @@ exports.getCart = async (req, res) => {
   try {
     const cartItems = await CartItem.findAll({
       where: { user_id: req.user.id },
-      include: [{ model: MenuItem, attributes: ['id', 'name', 'price', 'restaurant_id'] }]
+      include: [{ model: MenuItem, attributes: ['id', ['item_name', 'name'], 'price', 'restaurant_id'] }]
     });
     res.status(200).json({ status: 'success', results: cartItems.length, data: cartItems });
   } catch (error) {

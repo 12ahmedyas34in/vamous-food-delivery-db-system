@@ -1,33 +1,71 @@
-const jwt = require('jsonwebtoken');
+// backend/middleware/authMiddleware.js
+//
+// Phase 3 Push 4: reads JWT from httpOnly cookie first.
+// Authorization header kept as fallback so existing Postman collections
+// and curl tests continue to work during transition.
+
+const jwt    = require('jsonwebtoken');
 const { User } = require('../models');
-// 1. Protect Routes: Ensures user is logged in and token is valid
+const { errorResponse } = require('../utils/response');
+const logger = require('../config/logger');
+
 exports.protect = async (req, res, next) => {
-  let token;
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    token = req.headers.authorization.split(' ')[1];
-  }
-  if (!token) {
-    return res.status(401).json({ status: 'fail', message: 'Not authorized, no token provided' });
-  }
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // SECURITY: Check if user was deleted AFTER the token was issued
-    const currentUser = await User.findByPk(decoded.id);
-    if (!currentUser) {
-      return res.status(401).json({ status: 'fail', message: 'The user belonging to this token no longer exists' });
+    let token;
+
+    // 1. Cookie (primary — Push 4 path)
+    if (req.cookies && req.cookies.token) {
+      token = req.cookies.token;
     }
-    // Attach user to the request
-    req.user = currentUser;
+    // 2. Authorization header (fallback — keeps Postman/curl working)
+    else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+
+    if (!token) {
+      return errorResponse(res, 'Not authorized. No token provided.', 401);
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await User.findByPk(decoded.id, {
+      attributes: ['id', 'full_name', 'email', 'role'],
+    });
+
+    if (!user) {
+      return errorResponse(res, 'User not found. Invalid token.', 401);
+    }
+
+    req.user = Object.freeze({
+      id:    user.id,
+      name:  user.full_name,
+      email: user.email,
+      role:  user.role,
+    });
+
+    if (process.env.NODE_ENV === 'development') {
+      logger.debug({ userId: req.user.id, role: req.user.role }, 'User authenticated');
+    }
+
     next();
-  } catch (err) {
-    return res.status(401).json({ status: 'fail', message: 'Invalid or expired token' });
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      return errorResponse(res, 'Invalid token. Please log in again.', 401);
+    }
+    if (error.name === 'TokenExpiredError') {
+      return errorResponse(res, 'Token expired. Please log in again.', 401);
+    }
+    next(error);
   }
 };
-// 2. Role Guard: Restricts route to specific user roles
+
 exports.restrictTo = (...roles) => {
   return (req, res, next) => {
+    if (!req.user) {
+      return errorResponse(res, 'Not authenticated', 401);
+    }
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ status: 'fail', message: 'Access denied: You do not have permission to perform this action' });
+      return errorResponse(res, `Access denied. Requires role: ${roles.join(' or ')}`, 403);
     }
     next();
   };

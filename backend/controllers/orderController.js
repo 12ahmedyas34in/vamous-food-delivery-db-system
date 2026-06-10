@@ -1,24 +1,22 @@
 // backend/controllers/orderController.js
-const { Order, OrderItem, OrderStatusHistory, CartItem, MenuItem, Restaurant, Driver, sequelize } = require('../models');
+const { Order, OrderItem, OrderStatusHistory, CartItem, MenuItem, Restaurant, Driver, Address, Payment, PaymentMethod, sequelize } = require('../models');
 const { canTransition } = require('../services/orderStateMachine');
 const { Op } = require('sequelize');
 
 // GET /api/orders/admin/stats
 exports.getAdminStats = async (req, res) => {
   try {
-    // Count only active orders
     const activeOrders = await Order.count({
       where: { status: ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY'] }
     });
 
-    // Calculate revenue for TODAY exactly from the database
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Start of today
+    today.setHours(0, 0, 0, 0);
 
-    const revenue = await Order.sum('total_price', {
+    const revenue = await Order.sum('total_amount', {
       where: {
-        status: 'COMPLETED',
-        createdAt: { [Op.gte]: today }
+        status:     'COMPLETED',
+        created_at: { [Op.gte]: today },
       }
     });
 
@@ -32,30 +30,113 @@ exports.getAdminStats = async (req, res) => {
 exports.createOrder = async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const { delivery_address } = req.body;
-    const user_id = req.user.id; 
+    const { address_id, special_instructions } = req.body;
+    const payment_method_id = req.body.payment_method_id || 1; // default: Cash on Delivery
+    const user_id = req.user.id;
 
-    if (!delivery_address) throw new Error('Delivery address is required');
+    if (!address_id) {
+      throw new Error('address_id is required');
+    }
+
+    const numericAddressId = Number(address_id);
+    if (!Number.isInteger(numericAddressId) || numericAddressId <= 0) {
+      throw new Error('Invalid address_id format. Must be a positive integer.');
+    }
+
+    const address = await Address.findOne({
+      where: { id: numericAddressId, user_id },
+      transaction: t,
+    });
+    if (!address) {
+      throw new Error('Invalid delivery address. Address not found or does not belong to you.');
+    }
+
+    // Validate payment method
+    const paymentMethod = await PaymentMethod.findByPk(payment_method_id, { transaction: t });
+    if (!paymentMethod) {
+      throw new Error('Invalid payment method.');
+    }
 
     const cartItems = await CartItem.findAll({ where: { user_id }, include: [{ model: MenuItem }], transaction: t });
     if (cartItems.length === 0) throw new Error('Your cart is empty');
 
     const restaurant_id = cartItems[0].MenuItem.restaurant_id;
-    let subtotal = 0;
-    const orderItemsData =[];
 
-    for (let item of cartItems) {
-      if (!item.MenuItem.is_available) throw new Error(`${item.MenuItem.name} is no longer available. Please remove it from your cart.`);
+    const restaurant = await Restaurant.findByPk(restaurant_id, { transaction: t });
+    const delivery_fee = parseFloat(restaurant?.delivery_fee ?? 50.00);
+
+    let subtotal = 0;
+    const orderItemsData = [];
+
+    for (let i = 0; i < cartItems.length; i++) {
+      const item = cartItems[i];
+      if (!item.MenuItem.is_available) {
+        throw new Error(`${item.MenuItem.item_name} is no longer available. Please remove it from your cart.`);
+      }
       subtotal += parseFloat(item.MenuItem.price) * item.quantity;
-      orderItemsData.push({ menu_item_id: item.menu_item_id, quantity: item.quantity, price: item.MenuItem.price });
+      orderItemsData.push({
+        menu_item_id: item.menu_item_id,
+        line_no:      i + 1,
+        quantity:     item.quantity,
+        unit_price:   item.MenuItem.price,
+      });
     }
 
-    const total_price = subtotal + 50.00; // 50 delivery fee
-    const order = await Order.create({ user_id, restaurant_id, total_price, delivery_address, status: 'PENDING' }, { transaction: t });
+    const total_amount = subtotal + delivery_fee;
+
+    // Determine initial status based on payment method
+    const isCOD = paymentMethod.method_name === 'Cash on Delivery';
+    const initialStatus = isCOD ? 'PAID' : 'PENDING_PAYMENT';
+
+    const order = await Order.create({
+      user_id,
+      restaurant_id,
+      address_id:           numericAddressId,
+      subtotal,
+      delivery_fee,
+      total_amount,
+      status:               initialStatus,
+      special_instructions: special_instructions || null,
+    }, { transaction: t });
 
     const mappedOrderItems = orderItemsData.map(item => ({ ...item, order_id: order.id }));
     await OrderItem.bulkCreate(mappedOrderItems, { transaction: t });
-    await OrderStatusHistory.create({ order_id: order.id, status: 'PENDING' }, { transaction: t });
+
+    // Status history: PENDING entry first, then PAID/PENDING_PAYMENT
+    await OrderStatusHistory.create({
+      order_id:      order.id,
+      status_name:   'PENDING',
+      actor_user_id: user_id,
+      notes:         'Order placed',
+    }, { transaction: t });
+
+    if (isCOD) {
+      await OrderStatusHistory.create({
+        order_id:      order.id,
+        status_name:   'PAID',
+        actor_user_id: user_id,
+        notes:         'Cash on delivery — payment collected at door',
+        updated_at:    new Date(Date.now() + 1000),
+      }, { transaction: t });
+    } else {
+      await OrderStatusHistory.create({
+        order_id:      order.id,
+        status_name:   'PENDING_PAYMENT',
+        actor_user_id: user_id,
+        notes:         'Awaiting manual payment confirmation',
+        updated_at:    new Date(Date.now() + 1000),
+      }, { transaction: t });
+    }
+
+    // Create payment record so simulate/confirm endpoints have a row to work with
+    await Payment.create({
+      order_id:          order.id,
+      payment_method_id: paymentMethod.id,
+      amount:            total_amount,
+      status:            isCOD ? 'completed' : 'pending',
+      paid_at:           isCOD ? new Date() : null,
+    }, { transaction: t });
+
     await CartItem.destroy({ where: { user_id }, transaction: t });
 
     await t.commit();
@@ -79,13 +160,13 @@ exports.getUserOrders = async (req, res) => {
       const driverProfile = await Driver.findOne({ where: { user_id: req.user.id } });
       whereClause.driver_id = driverProfile ? driverProfile.id : null; 
     } else if (req.user.role === 'restaurant_owner') {
-      whereClause.restaurant_id = req.user.restaurant_id; 
+      const ownerRestaurant = await Restaurant.findOne({ where: { owner_id: req.user.id } });
+      whereClause.restaurant_id = ownerRestaurant ? ownerRestaurant.id : null;
     }
-
     const { count, rows } = await Order.findAndCountAll({
       where: whereClause,
       include: [{ model: Restaurant, attributes: ['name', 'address'] }],
-      order: [['createdAt', 'DESC']],
+      order: [['created_at', 'DESC']],
       limit, offset
     });
 
@@ -108,13 +189,13 @@ exports.getOrderById = async (req, res) => {
       const driverProfile = await Driver.findOne({ where: { user_id: req.user.id } });
       whereClause.driver_id = driverProfile ? driverProfile.id : null; 
     } else if (req.user.role === 'restaurant_owner') {
-      whereClause.restaurant_id = req.user.restaurant_id; 
+      const ownerRestaurant = await Restaurant.findOne({ where: { owner_id: req.user.id } });
+      whereClause.restaurant_id = ownerRestaurant ? ownerRestaurant.id : null;
     }
-
     const order = await Order.findOne({
       where: whereClause,
       include:[
-        { model: OrderItem, include: [{ model: MenuItem, attributes: ['name'] }] },
+        { model: OrderItem, include: [{ model: MenuItem, attributes: [['item_name', 'name']] }] },
         { model: OrderStatusHistory },
         { model: Restaurant, attributes: ['name'] }
       ]
@@ -155,7 +236,7 @@ exports.updateOrderStatus = async (req, res) => {
 
     order.status = status;
     await order.save({ transaction: t });
-    await OrderStatusHistory.create({ order_id: order.id, status: status }, { transaction: t });
+    await OrderStatusHistory.create({ order_id: order.id, status_name: status, actor_user_id: req.user.id }, { transaction: t });
 
     await t.commit();
     res.status(200).json({ status: 'success', message: `Order status updated to ${status}`, data: order });
@@ -190,7 +271,7 @@ exports.assignDriver = async (req, res) => {
 
     driver.is_available = false;
     await driver.save({ transaction: t });
-    await OrderStatusHistory.create({ order_id: order.id, status: 'OUT_FOR_DELIVERY' }, { transaction: t });
+    await OrderStatusHistory.create({ order_id: order.id, status_name: 'OUT_FOR_DELIVERY', actor_user_id: req.user.id }, { transaction: t });
 
     await t.commit();
     res.status(200).json({ status: 'success', message: 'Order assigned successfully', data: order });
@@ -218,7 +299,7 @@ exports.completeDelivery = async (req, res) => {
     await order.save({ transaction: t });
     driver.is_available = true;
     await driver.save({ transaction: t });
-    await OrderStatusHistory.create({ order_id: order.id, status: 'COMPLETED' }, { transaction: t });
+    await OrderStatusHistory.create({ order_id: order.id, status_name: 'COMPLETED', actor_user_id: req.user.id }, { transaction: t });
     await t.commit();
     res.status(200).json({ status: 'success', message: 'Delivery completed successfully!', data: order });
   } catch (error) {

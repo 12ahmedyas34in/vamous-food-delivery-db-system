@@ -1,7 +1,8 @@
-// frontend/src/pages/OrderConfirmation.js
+// frontend/src/pages/orders/OrderConfirmation.js
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from '../api/axios';
+import axios from '../../api/axios';
+import { useAuth } from '../../hooks/useAuth';
 
 const STATUS_COLORS = {
   PENDING: 'orange', CONFIRMED: 'blue', PREPARING: 'purple',
@@ -13,6 +14,7 @@ const ALL_STATUSES = ['CONFIRMED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY', 'CO
 const OrderConfirmation = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
 
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -26,11 +28,7 @@ const OrderConfirmation = () => {
   const [reviewStatus, setReviewStatus] = useState(''); // 'success' | 'error' message
   const [submitting, setSubmitting] = useState(false);  // prevents double-submit
 
-  const currentUser = (() => {
-    try { return JSON.parse(localStorage.getItem('user')) || {}; }
-    catch { return {}; }
-  })();
-  const isPrivileged = ['admin', 'restaurant_owner', 'driver'].includes(currentUser.role);
+  const isPrivileged = ['admin', 'restaurant_owner', 'driver'].includes(currentUser?.role);
 
   const fetchOrder = async () => {
     try {
@@ -103,7 +101,7 @@ const OrderConfirmation = () => {
       <button onClick={() => navigate('/orders')} style={styles.back}>← My Orders</button>
 
       <div style={{ ...styles.card, borderTop: `4px solid ${statusColor}` }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', justifycontent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <h2 style={{ margin: '0 0 4px' }}>Order #{order.id}</h2>
             <p style={styles.meta}>{order.Restaurant?.name || 'Restaurant'}</p>
@@ -117,15 +115,15 @@ const OrderConfirmation = () => {
         <h3 style={{ margin: '0 0 16px' }}>Receipt breakdown</h3>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {order.OrderItems?.map(item => (
-            <li key={item.id} style={styles.lineItem}>
+            <li key={item.line_no} style={styles.lineItem}>
               <span>{item.quantity}× {item.MenuItem?.name || 'Unknown item'}</span>
-              <span>${(parseFloat(item.price) * item.quantity).toFixed(2)}</span>
+              <span>${(parseFloat(item.unit_price) * item.quantity).toFixed(2)}</span>
             </li>
           ))}
         </ul>
         <div style={{ ...styles.lineItem, fontWeight: 'bold', fontSize: '16px', marginTop: '12px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
           <span>Total (incl. delivery)</span>
-          <span>${parseFloat(order.total_price).toFixed(2)}</span>
+          <span>${parseFloat(order.total_amount).toFixed(2)}</span>
         </div>
       </div>
 
@@ -193,12 +191,12 @@ const OrderConfirmation = () => {
 
 const styles = {
   page: { padding: '24px 20px', fontFamily: 'Arial, sans-serif', maxWidth: '640px', margin: '0 auto' },
-  center: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '40vh', padding: '40px 20px' },
+  center: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifycontent: 'center', minHeight: '40vh', padding: '40px 20px' },
   card: { background: '#fff', border: '1px solid #e8e8e8', borderRadius: '12px', padding: '20px 24px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' },
   back: { background: '#f5f5f5', border: 'none', padding: '8px 16px', cursor: 'pointer', borderRadius: '6px', marginBottom: '16px', fontWeight: 'bold' },
   badge: { padding: '6px 16px', borderRadius: '20px', color: '#fff', fontWeight: 'bold', fontSize: '13px' },
   meta: { margin: 0, color: '#888', fontSize: '13px' },
-  lineItem: { display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0', fontSize: '15px' },
+  lineItem: { display: 'flex', justifycontent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0', fontSize: '15px' },
   select: { flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px' },
   textarea: { width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ccc', minHeight: '80px', marginBottom: '10px', boxSizing: 'border-box', fontFamily: 'Arial' },
   btn: { padding: '8px 16px', cursor: 'pointer', border: '1px solid #ccc', borderRadius: '6px', background: '#fff' },

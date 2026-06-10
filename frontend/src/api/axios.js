@@ -1,31 +1,33 @@
+// frontend/src/api/axios.js
+//
+// Phase 3 Push 4 changes:
+//   - withCredentials: true — sends httpOnly cookie on every request
+//   - Authorization header interceptor removed — token is now in the cookie
+//   - 401 response interceptor kept — still handles session expiry
+
 import axios from 'axios';
 
-// 1. Environment Variable Support
 const instance = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  baseURL:         process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  withCredentials: true,   // Phase 3 Push 4 — send cookie on every request
 });
 
-// 2. Request Interceptor: Automatically attach Token
+// Request interceptor — no longer attaches token (cookie handles it)
+// Kept in place in case we need to attach other headers in future
 instance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
-  },
-  (error) => Promise.reject(error)
+  (config) => config,
+  (error)  => Promise.reject(error)
 );
 
-// 3. Response Interceptor: The Zombie State Killer
+// Response interceptor — session expiry handler unchanged
 instance.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Only trigger forced logout if the 401 is NOT from the login page
     const isLoginRoute = error.config && error.config.url.includes('/auth/login');
 
     if (error.response && error.response.status === 401 && !isLoginRoute) {
       alert('Your session has expired or access is denied. Please log in again.');
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.removeItem('user');   // token no longer in localStorage
       window.location.href = '/login';
     }
     return Promise.reject(error);

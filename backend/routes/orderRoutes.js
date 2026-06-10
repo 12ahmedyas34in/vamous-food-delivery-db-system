@@ -8,16 +8,16 @@ const { protect, restrictTo } = require('../middleware/authMiddleware');
 // Customer creates order 
 router.post('/', protect, orderController.createOrder);
 
-// Get Order History (Phase 1)
+// Get Order History
 router.get('/', protect, orderController.getUserOrders);
 
 // Dedicated Stats route for the Dashboard (Must be above /:id)
 router.get('/admin/stats', protect, restrictTo('admin', 'restaurant_owner'), orderController.getAdminStats);
 
-// Get Single Order (Phase 2)
+// Get Single Order
 router.get('/:id', protect, orderController.getOrderById);
 
-// Admin/Owner updates status (Phase 4)
+// Admin/Owner updates status
 router.put('/:id/status', protect, restrictTo('admin', 'restaurant_owner', 'driver'), orderController.updateOrderStatus);
 // Driver specific actions (Day 8)
 router.put('/:id/assign-driver', protect, restrictTo('driver'), orderController.assignDriver);

@@ -1,7 +1,16 @@
+// backend/controllers/authController.js
+//
+// Phase 3 Push 4 changes:
+//   login    — JWT now set as httpOnly cookie; token removed from response body
+//   register — unchanged (returns token in body for initial session setup)
+//   logout   — new: clears the httpOnly cookie
+//   getMe    — unchanged
+
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const jwt    = require('jsonwebtoken');
 const { User } = require('../models');
-// Helper function: Generate Token with strong payload
+const { successResponse } = require('../utils/response');
+
 const signToken = (user) => {
   return jwt.sign(
     { id: user.id, role: user.role },
@@ -9,85 +18,147 @@ const signToken = (user) => {
     { expiresIn: process.env.JWT_EXPIRES_IN || '30d' }
   );
 };
-// 1. POST /api/auth/register
+
+// Cookie options — reused for both set and clear
+const cookieOptions = () => ({
+  httpOnly: true,
+  secure:   process.env.NODE_ENV === 'production', // HTTPS only in prod
+  sameSite: 'lax',
+  maxAge:   30 * 24 * 60 * 60 * 1000, // 30 days in ms
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// POST /api/auth/register
+// Unchanged from before — still returns token in body so the client can
+// store it and stay logged in immediately after registration.
+// ══════════════════════════════════════════════════════════════════════════════
 exports.register = async (req, res) => {
   try {
-    // SECURITY: We do NOT extract 'role'. Users cannot make themselves admins.
-    const { name, email, password } = req.body;
-    // VALIDATION 1: Check for missing fields
-    if (!name || !email || !password) {
-      return res.status(400).json({ status: 'fail', message: 'Name, email, and password are required' });
+    const { full_name, email, password, phone } = req.body;
+
+    if (!full_name || !email || !password || !phone) {
+      return res.status(400).json({ status: 'fail', message: 'Full name, email, phone, and password are required' });
     }
-    // VALIDATION 2: Check email format
     if (!email.includes('@')) {
       return res.status(400).json({ status: 'fail', message: 'Invalid email format' });
     }
-    // VALIDATION 3: Check password strength
     if (password.length < 6) {
       return res.status(400).json({ status: 'fail', message: 'Password must be at least 6 characters' });
     }
-    // VALIDATION 4: Prevent duplicate emails
+
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
       return res.status(400).json({ status: 'fail', message: 'Email already in use' });
     }
-    // Hash password & Create user
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const salt          = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
+
     const newUser = await User.create({
-      name,
+      full_name,
       email,
-      password: hashedPassword,
-      role: 'customer' // SECURITY: Forced to customer. Admins must be made via database directly.
+      password_hash,
+      phone,
+      role: 'customer',
     });
+
     const token = signToken(newUser);
-    // Standardized Success Response
-    res.status(201).json({
+
+    // Set cookie on register too so the session is immediately cookie-backed
+    res.cookie('token', token, cookieOptions());
+
+    return res.status(201).json({
       status: 'success',
       token,
-      user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role }
+      data: {
+        token,
+        user: {
+          id:   newUser.id,
+          name: newUser.full_name,
+          role: newUser.role,
+        },
+      },
+      user: {
+        id:   newUser.id,
+        name: newUser.full_name,
+        role: newUser.role,
+      },
     });
   } catch (error) {
     res.status(500).json({ status: 'fail', message: error.message });
   }
 };
-// 2. POST /api/auth/login
+
+// ══════════════════════════════════════════════════════════════════════════════
+// POST /api/auth/login
+// Phase 3 Push 4: JWT moved to httpOnly cookie.
+// Token is NOT returned in the response body anymore.
+// User object (id, name, role) still returned so the frontend can store it
+// in localStorage for UI gating (role-based nav, RestrictedRoute checks).
+// ══════════════════════════════════════════════════════════════════════════════
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    // VALIDATION: Check for missing fields
+
     if (!email || !password) {
       return res.status(400).json({ status: 'fail', message: 'Email and password are required' });
     }
-    // Check if user exists
+
     const user = await User.findOne({ where: { email } });
     if (!user) {
       return res.status(401).json({ status: 'fail', message: 'Invalid email or password' });
     }
-    // Check if password matches
-    const isMatch = await bcrypt.compare(password, user.password);
+
+    const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
       return res.status(401).json({ status: 'fail', message: 'Invalid email or password' });
     }
+
     const token = signToken(user);
-    // Standardized Success Response
-    res.status(200).json({
+
+    // Set JWT as httpOnly cookie — not accessible from JavaScript
+    res.cookie('token', token, cookieOptions());
+
+    // Return user object only — no token in body
+    return res.status(200).json({
       status: 'success',
-      token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+      user: {
+        id:   user.id,
+        name: user.full_name,
+        role: user.role,
+      },
     });
   } catch (error) {
     res.status(500).json({ status: 'fail', message: error.message });
   }
 };
-// 3. GET /api/auth/me
-exports.getMe = async (req, res) => {
+
+// ══════════════════════════════════════════════════════════════════════════════
+// POST /api/auth/logout
+// Phase 3 Push 4: new endpoint — clears the httpOnly cookie.
+// ══════════════════════════════════════════════════════════════════════════════
+exports.logout = (req, res) => {
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure:   process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+  });
+  return res.status(200).json({ status: 'success', message: 'Logged out successfully.' });
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GET /api/auth/me
+// Unchanged — req.user already normalized by authMiddleware
+// ══════════════════════════════════════════════════════════════════════════════
+exports.getMe = async (req, res, next) => {
   try {
-    const user = await User.findByPk(req.user.id, {
-      attributes: { exclude: ['password'] } // SECURITY: Never send back the hash
-    });
-    res.status(200).json({ status: 'success', user });
+    return successResponse(res, {
+      id:    req.user.id,
+      name:  req.user.name,
+      email: req.user.email,
+      role:  req.user.role,
+    }, 'User profile retrieved');
   } catch (error) {
-    res.status(500).json({ status: 'fail', message: error.message });
+    next(error);
   }
 };

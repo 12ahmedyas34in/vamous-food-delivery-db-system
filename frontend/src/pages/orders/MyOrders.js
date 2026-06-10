@@ -1,7 +1,7 @@
-// frontend/src/pages/MyOrders.js
+// frontend/src/pages/orders/MyOrders.js
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from '../api/axios';
+import axios from '../../api/axios';
 
 const STATUS_COLORS = {
   PENDING: 'orange', CONFIRMED: 'blue', PREPARING: 'purple',
@@ -69,8 +69,8 @@ const MyOrders = () => {
               <div key={order.id} onClick={() => navigate(`/orders/${order.id}`)} style={styles.orderCard}>
                 <div>
                   <h4 style={{ margin: '0 0 4px 0' }}>Order #{order.id}</h4>
-                  <p style={styles.meta}>{new Date(order.createdAt).toLocaleString()}</p>
-                  <p style={{ margin: '6px 0 0', fontWeight: '600' }}>${parseFloat(order.total_price).toFixed(2)}</p>
+                  <p style={styles.meta}>{new Date(order.created_at).toLocaleString()}</p>
+                  <p style={{ margin: '6px 0 0', fontWeight: '600' }}>${parseFloat(order.total_amount).toFixed(2)}</p>
                 </div>
                 <span style={{ ...styles.badge, background: STATUS_COLORS[order.status] || 'gray' }}>{order.status}</span>
               </div>
