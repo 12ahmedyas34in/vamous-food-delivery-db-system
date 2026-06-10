@@ -1,8 +1,9 @@
-// frontend/src/pages/AdminDashboard.js
+// frontend/src/pages/admin/AdminDashboard.js
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from '../api/axios';
+import axios from '../../api/axios';
+import { useAuth } from '../../hooks/useAuth';
 
 const STATUS_COLORS = {
   PENDING:          'orange',
@@ -35,14 +36,10 @@ const AdminDashboard = () => {
 
   const isFetching = useRef(false);
   const navigate   = useNavigate();
-
-  const currentUser = (() => {
-    try { return JSON.parse(localStorage.getItem('user')) || {}; }
-    catch { return {}; }
-  })();
+  const { user: currentUser, logout } = useAuth();
 
   // Route is already restricted to 'admin' via RestrictedRoute in App.js
-  const isAdmin = currentUser.role === 'admin';
+  const isAdmin = currentUser?.role === 'admin';
 
   // ── Fetch orders + stats ─────────────────────────────────────────────────
   const fetchOrders = async () => {
@@ -178,9 +175,8 @@ const AdminDashboard = () => {
             Home
           </button>
           <button
-            onClick={() => {
-              localStorage.removeItem('token');
-              localStorage.removeItem('user');
+            onClick={async () => {
+              await logout();
               navigate('/login');
             }}
             style={styles.btnDanger}

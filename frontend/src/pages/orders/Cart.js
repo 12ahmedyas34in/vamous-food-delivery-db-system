@@ -1,4 +1,4 @@
-// frontend/src/pages/Cart.js
+// frontend/src/pages/orders/Cart.js
 //
 // - Fetches available payment methods from GET /api/payments/methods on mount
 // - Renders a radio-button selector for each method
@@ -8,7 +8,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from '../api/axios';
+import axios from '../../api/axios';
 
 // ── Payment method icons ──────────────────────────────────────────────────────
 const METHOD_META = {

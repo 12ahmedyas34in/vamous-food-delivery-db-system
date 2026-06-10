@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
-import axios from '../api/axios';
+import { useAuth } from '../hooks/useAuth';
 
 // ── NavLink className helpers ─────────────────────────────────────────────────
 const navLinkClass = ({ isActive }) => [
@@ -30,11 +30,8 @@ const mobileNavLinkClass = ({ isActive }) => [
 const Header = () => {
   const [scrolled,   setScrolled]   = useState(false);
   const [menuOpen,   setMenuOpen]   = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('user'));
-  const [userRole,   setUserRole]   = useState(() => {
-    try { return JSON.parse(localStorage.getItem('user') || '{}').role || ''; }
-    catch { return ''; }
-  });
+  const { isAuthenticated: isLoggedIn, user, logout } = useAuth();
+  const userRole = user?.role || '';
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -43,34 +40,9 @@ const Header = () => {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  useEffect(() => {
-    const syncAuth = () => {
-      setIsLoggedIn(!!localStorage.getItem('user'));
-      try { setUserRole(JSON.parse(localStorage.getItem('user') || '{}').role || ''); }
-      catch { setUserRole(''); }
-    };
-    window.addEventListener('storage',     syncAuth);
-    window.addEventListener('auth-change', syncAuth);
-    return () => {
-      window.removeEventListener('storage',     syncAuth);
-      window.removeEventListener('auth-change', syncAuth);
-    };
-  }, []);
-
-  // Phase 3 Push 4: calls /api/auth/logout to clear the httpOnly cookie,
-  // then clears localStorage and redirects. Fire-and-forget on the API call —
-  // we always clear localStorage and redirect even if the request fails,
-  // because the worst case is an orphaned cookie that expires naturally.
   const handleLogout = async () => {
-    try {
-      await axios.post('/auth/logout');
-    } catch {
-      // Non-fatal — proceed with local cleanup regardless
-    } finally {
-      localStorage.removeItem('user');
-      window.dispatchEvent(new Event('auth-change'));
-      navigate('/login');
-    }
+    await logout();
+    navigate('/login');
   };
 
   const navLinks = [

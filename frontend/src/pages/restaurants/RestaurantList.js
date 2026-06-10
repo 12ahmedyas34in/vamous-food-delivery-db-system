@@ -1,8 +1,8 @@
-// frontend/src/pages/RestaurantList.js
+// frontend/src/pages/restaurants/RestaurantList.js
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from '../api/axios';
+import axios from '../../api/axios';
 
 // Shown when image_url is null or the image fails to load
 const RestaurantPlaceholder = ({ name }) => (

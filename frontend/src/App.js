@@ -1,52 +1,39 @@
 // frontend/src/App.js
-//
-// Phase 3 additions (marked):
-//   - NotFound catch-all route (*)
-//   - /owner/dashboard restricted to restaurant_owner role
-//   All existing routes are untouched.
 
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
-// ── Existing pages ────────────────────────────────────────────────────────────
-import Login             from './pages/Login';
-import Register          from './pages/Register';
-import RestaurantList    from './pages/RestaurantList';
-import Menu              from './pages/Menu';
-import Cart              from './pages/Cart';
-import MyOrders          from './pages/MyOrders';
-import OrderConfirmation from './pages/OrderConfirmation';
-import AdminDashboard    from './pages/AdminDashboard';
+// ── Layouts ──────────────────────────────────────────────────────────────────
+import AppLayout  from './components/layout/AppLayout';
+import AuthLayout from './components/layout/AuthLayout';
 
+// ── Route Guards ─────────────────────────────────────────────────────────────
+import ProtectedRoute  from './components/routes/ProtectedRoute';
+import RestrictedRoute from './components/routes/RestrictedRoute';
+
+// ── Pages ────────────────────────────────────────────────────────────────────
 import Home             from './pages/Home';
 import AddRestaurant    from './pages/AddRestaurant';
 import SignUpToDeliver  from './pages/SignUpToDeliver';
 import AddressBook      from './pages/AddressBook';
-
 import NotFound         from './pages/NotFound';
-import OwnerDashboard   from './pages/OwnerDashboard';
 
-// ── Route guards ────
-const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  if (!token) return <Navigate to="/login" replace />;
-  return children;
-};
+// ── Auth Pages ──
+import Login    from './pages/auth/Login';
+import Register from './pages/auth/Register';
 
-// Redirects to /login if no token, or to /restaurants if role doesn't match
-const RestrictedRoute = ({ children, allowedRoles }) => {
-  const token = localStorage.getItem('token');
-  if (!token) return <Navigate to="/login" replace />;
-  try {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!allowedRoles.includes(user.role)) {
-      return <Navigate to="/restaurants" replace />;
-    }
-  } catch {
-    return <Navigate to="/login" replace />;
-  }
-  return children;
-};
+// ── Order Pages ──
+import Cart              from './pages/orders/Cart';
+import MyOrders          from './pages/orders/MyOrders';
+import OrderConfirmation from './pages/orders/OrderConfirmation';
+
+// ── Restaurant Pages ──
+import RestaurantList from './pages/restaurants/RestaurantList';
+import Menu           from './pages/restaurants/Menu';
+
+// ── Dashboard Pages ──
+import AdminDashboard from './pages/admin/AdminDashboard';
+import OwnerDashboard from './pages/owner/OwnerDashboard';
 
 function App() {
   return (
@@ -55,18 +42,24 @@ function App() {
 
         {/* ── Public routes ── */}
         <Route path="/"               element={<Home />} />
-        <Route path="/login"          element={<Login />} />
-        <Route path="/register"       element={<Register />} />
         <Route path="/add-restaurant" element={<AddRestaurant />} />
         <Route path="/deliver"        element={<SignUpToDeliver />} />
 
-        {/* ── Protected routes (any authenticated user) ── */}
-        <Route path="/restaurants"          element={<ProtectedRoute><RestaurantList /></ProtectedRoute>} />
-        <Route path="/restaurants/:id/menu" element={<ProtectedRoute><Menu /></ProtectedRoute>} />
-        <Route path="/cart"                 element={<ProtectedRoute><Cart /></ProtectedRoute>} />
-        <Route path="/addresses"            element={<ProtectedRoute><AddressBook /></ProtectedRoute>} />
-        <Route path="/orders"               element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
-        <Route path="/orders/:id"           element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
+        {/* ── Auth routes (login/register) wrapped in AuthLayout ── */}
+        <Route element={<AuthLayout />}>
+          <Route path="/login"    element={<Login />} />
+          <Route path="/register" element={<Register />} />
+        </Route>
+
+        {/* ── Protected routes wrapped in AppLayout and ProtectedRoute ── */}
+        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route path="/restaurants"          element={<RestaurantList />} />
+          <Route path="/restaurants/:id/menu" element={<Menu />} />
+          <Route path="/cart"                 element={<Cart />} />
+          <Route path="/addresses"            element={<AddressBook />} />
+          <Route path="/orders"               element={<MyOrders />} />
+          <Route path="/orders/:id"           element={<OrderConfirmation />} />
+        </Route>
 
         {/* ── Admin only ── */}
         <Route

@@ -1,4 +1,4 @@
-// frontend/src/pages/OwnerDashboard.jsx
+// frontend/src/pages/owner/OwnerDashboard.jsx
 //
 // Sections:
 //   1. Restaurant info editor  (PUT /api/restaurants/:id)
@@ -8,10 +8,11 @@
 // On load: fetches the owner's restaurant using GET /api/restaurants
 // filtered to the logged-in owner's data, then fetches the menu and orders.
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate }  from 'react-router-dom';
-import axios            from '../api/axios';
-import ImageUpload      from '../components/ImageUpload';
+import axios            from '../../api/axios';
+import ImageUpload      from '../../components/common/ImageUpload';
+import { useAuth }      from '../../hooks/useAuth';
 
 // ─── constants ────────────────────────────────────────────────────────────────
 const KITCHEN_TRANSITIONS = {
@@ -32,19 +33,12 @@ const STATUS_LABEL = {
 
 const TABS = { ORDERS: 'orders', MENU: 'menu', RESTAURANT: 'restaurant' };
 
-// Parse user once outside component to avoid recreating on every render
-const getCurrentUser = () => {
-  try { return JSON.parse(localStorage.getItem('user') || '{}'); }
-  catch { return {}; }
-};
-
 // ══════════════════════════════════════════════════════════════════════════════
 // Component
 // ══════════════════════════════════════════════════════════════════════════════
 const OwnerDashboard = () => {
   const navigate    = useNavigate();
-  // Stable reference — only parsed once, not on every render
-  const currentUser = useMemo(() => getCurrentUser(), []);
+  const { user: currentUser, logout } = useAuth();
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [tab,        setTab]        = useState(TABS.ORDERS);
@@ -72,6 +66,7 @@ const OwnerDashboard = () => {
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
+    if (!currentUser?.id) return;
     try {
       const [restRes, ordersRes] = await Promise.all([
         axios.get('/restaurants?limit=50'),
@@ -109,7 +104,7 @@ const OwnerDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentUser.id]); // stable — currentUser is memoized
+  }, [currentUser?.id]);
 
   useEffect(() => {
     fetchAll();
@@ -207,9 +202,8 @@ const OwnerDashboard = () => {
           <h2 style={s.headerTitle}>{restaurant.name}</h2>
         </div>
         <button
-          onClick={() => {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+          onClick={async () => {
+            await logout();
             navigate('/login');
           }}
           style={s.btnDanger}

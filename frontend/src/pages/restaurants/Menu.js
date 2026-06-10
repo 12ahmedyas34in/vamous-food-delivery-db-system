@@ -1,8 +1,8 @@
-// frontend/src/pages/Menu.js
+// frontend/src/pages/restaurants/Menu.js
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from '../api/axios';
+import axios from '../../api/axios';
 
 // Shown in the restaurant header when image_url is null
 const HeaderPlaceholder = () => (
