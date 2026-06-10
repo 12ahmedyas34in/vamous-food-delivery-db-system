@@ -1,12 +1,8 @@
-// frontend/src/pages/RestaurantList.js
-//
-// Phase 2: Restaurant cards show cover images with a gradient fallback.
-// Cuisine tags rendered from the M:N restaurant_cuisines join.
-// All other logic (fetch, navigate) unchanged from pre-Phase 2.
+// frontend/src/pages/restaurants/RestaurantList.js
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from '../api/axios';
+import axios from '../../api/axios';
 
 // Shown when image_url is null or the image fails to load
 const RestaurantPlaceholder = ({ name }) => (

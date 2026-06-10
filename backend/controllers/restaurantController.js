@@ -1,24 +1,60 @@
+// backend/controllers/restaurantController.js
+//
+//   updateRestaurant   PUT /api/restaurants/:id   — owner/admin only, IDOR check
+//   updateMenuItem     PUT /api/menu-items/:id    — owner/admin only, JOIN ownership check
+//
+// Existing functions unchanged:
+//   getRestaurants, getRestaurantById, getRestaurantMenu, getMenuItemById
+
+const cloudinary                         = require('cloudinary').v2;
 const { Restaurant, MenuItem, CuisineType } = require('../models');
-const { Op }                                = require('sequelize');
-const { successResponse, errorResponse }    = require('../utils/response');
+const { Op }                             = require('sequelize');
+const { successResponse, errorResponse } = require('../utils/response');
+const logger                             = require('../config/logger');
+
+// Configure Cloudinary from environment variables
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 // Reusable include — keeps both getRestaurants and getRestaurantById in sync
 const CUISINE_INCLUDE = {
-  model:   CuisineType,
-  as:      'Cuisines',
+  model:      CuisineType,
+  as:         'Cuisines',
   attributes: ['id', 'type_name'],
-  through: { attributes: [] }, // hide junction table fields
+  through:    { attributes: [] },
 };
 
+// ── helper: extract Cloudinary public_id from a stored URL ────────────────────
+// e.g. "https://res.cloudinary.com/.../saporivivi/restaurants/abc123.jpg"
+//   → "saporivivi/restaurants/abc123"
+const extractPublicId = (url) => {
+  if (!url) return null;
+  try {
+    const withoutExt  = url.replace(/\.[^/.]+$/, '');
+    const parts       = withoutExt.split('/upload/');
+    if (parts.length < 2) return null;
+    // Strip version segment (v1234567890/) if present
+    const afterUpload = parts[1].replace(/^v\d+\//, '');
+    return afterUpload;
+  } catch {
+    return null;
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
 // GET /api/restaurants
+// ══════════════════════════════════════════════════════════════════════════════
 exports.getRestaurants = async (req, res, next) => {
   try {
     const { name, cuisine } = req.query;
     const limit  = Math.min(parseInt(req.query.limit)  || 10, 50);
     const offset = Math.max(parseInt(req.query.offset) || 0,  0);
 
-    const whereClause    = { is_active: true };
-    const andConditions  = [];
+    const whereClause   = { is_active: true };
+    const andConditions = [];
 
     if (name)    andConditions.push({ name: { [Op.like]: `%${name}%` } });
     if (cuisine) andConditions.push({ name: { [Op.like]: `%${cuisine}%` } });
@@ -44,7 +80,9 @@ exports.getRestaurants = async (req, res, next) => {
   }
 };
 
+// ══════════════════════════════════════════════════════════════════════════════
 // GET /api/restaurants/:id
+// ══════════════════════════════════════════════════════════════════════════════
 exports.getRestaurantById = async (req, res, next) => {
   try {
     if (isNaN(req.params.id)) return errorResponse(res, 'Invalid ID format', 400);
@@ -61,7 +99,9 @@ exports.getRestaurantById = async (req, res, next) => {
   }
 };
 
+// ══════════════════════════════════════════════════════════════════════════════
 // GET /api/restaurants/:id/menu
+// ══════════════════════════════════════════════════════════════════════════════
 exports.getRestaurantMenu = async (req, res, next) => {
   try {
     if (isNaN(req.params.id)) return errorResponse(res, 'Invalid ID format', 400);
@@ -92,15 +132,18 @@ exports.getRestaurantMenu = async (req, res, next) => {
   }
 };
 
+// ══════════════════════════════════════════════════════════════════════════════
 // GET /api/menu-items/:id
+// ══════════════════════════════════════════════════════════════════════════════
 exports.getMenuItemById = async (req, res, next) => {
   try {
     if (isNaN(req.params.id)) return errorResponse(res, 'Invalid ID format', 400);
 
-    const menuItem = await MenuItem.findOne({ where: { id: req.params.id, is_available: true } });
+    const menuItem = await MenuItem.findOne({
+      where: { id: req.params.id, is_available: true },
+    });
     if (!menuItem) return errorResponse(res, 'Menu item not found or unavailable', 404);
 
-    // DTO: maps item_name → name for frontend compatibility
     const itemData = {
       id:           menuItem.id,
       name:         menuItem.item_name,
@@ -112,6 +155,133 @@ exports.getMenuItemById = async (req, res, next) => {
     };
 
     return successResponse(res, itemData, 'Menu item retrieved successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PUT /api/restaurants/:id
+// Auth: protect + restrictTo('restaurant_owner', 'admin')
+//
+// Ownership check: owner must own this restaurant (IDOR guard).
+// Admins bypass the ownership check.
+// If image_url is being replaced, old Cloudinary image is deleted.
+// ══════════════════════════════════════════════════════════════════════════════
+exports.updateRestaurant = async (req, res, next) => {
+  try {
+    if (isNaN(req.params.id)) return errorResponse(res, 'Invalid ID format', 400);
+
+    const isAdmin = req.user.role === 'admin';
+
+    // Build ownership-aware where clause
+    const where = isAdmin
+      ? { id: req.params.id }
+      : { id: req.params.id, owner_id: req.user.id };
+
+    const restaurant = await Restaurant.findOne({ where });
+    if (!restaurant) {
+      return errorResponse(res, 'Restaurant not found or access denied', 404);
+    }
+
+    // Fields the owner is allowed to update
+    const { name, description, address, phone, delivery_fee, estimated_time, image_url } = req.body;
+
+    // If a new image_url is provided and it differs from the current one,
+    // delete the old image from Cloudinary to avoid orphaned assets
+    if (image_url && image_url !== restaurant.image_url && restaurant.image_url) {
+      const oldPublicId = extractPublicId(restaurant.image_url);
+      if (oldPublicId) {
+        try {
+          await cloudinary.uploader.destroy(oldPublicId);
+        } catch (cdnErr) {
+          // Non-fatal — log but don't block the update
+          logger.error({ err: cdnErr }, 'Cloudinary cleanup failed for restaurant image');
+        }
+      }
+    }
+
+    await restaurant.update({
+      ...(name           !== undefined && { name }),
+      ...(description    !== undefined && { description }),
+      ...(address        !== undefined && { address }),
+      ...(phone          !== undefined && { phone }),
+      ...(delivery_fee   !== undefined && { delivery_fee }),
+      ...(estimated_time !== undefined && { estimated_time }),
+      ...(image_url      !== undefined && { image_url }),
+    });
+
+    return successResponse(res, restaurant, 'Restaurant updated successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PUT /api/menu-items/:id
+// Auth: protect + restrictTo('restaurant_owner', 'admin')
+//
+// Ownership check: JOIN through Restaurant to verify the item belongs to the
+// owner's restaurant. Admins bypass the ownership check.
+// If image_url is being replaced, old Cloudinary image is deleted.
+// ══════════════════════════════════════════════════════════════════════════════
+exports.updateMenuItem = async (req, res, next) => {
+  try {
+    if (isNaN(req.params.id)) return errorResponse(res, 'Invalid ID format', 400);
+
+    const isAdmin = req.user.role === 'admin';
+
+    // Fetch the item with its parent restaurant for ownership verification
+    const menuItem = await MenuItem.findOne({
+      where:   { id: req.params.id },
+      include: [{
+        model:      Restaurant,
+        attributes: ['id', 'owner_id'],
+        required:   true,
+      }],
+    });
+
+    if (!menuItem) return errorResponse(res, 'Menu item not found', 404);
+
+    // IDOR guard: non-admin owner must own the parent restaurant
+    if (!isAdmin && menuItem.Restaurant.owner_id !== req.user.id) {
+      return errorResponse(res, 'Access denied', 403);
+    }
+
+    const { item_name, description, price, is_available, image_url } = req.body;
+
+    // Cloudinary cleanup if image is being replaced
+    if (image_url && image_url !== menuItem.image_url && menuItem.image_url) {
+      const oldPublicId = extractPublicId(menuItem.image_url);
+      if (oldPublicId) {
+        try {
+          await cloudinary.uploader.destroy(oldPublicId);
+        } catch (cdnErr) {
+          logger.error({ err: cdnErr }, 'Cloudinary cleanup failed for menu item image');
+        }
+      }
+    }
+
+    await menuItem.update({
+      ...(item_name    !== undefined && { item_name }),
+      ...(description  !== undefined && { description }),
+      ...(price        !== undefined && { price }),
+      ...(is_available !== undefined && { is_available }),
+      ...(image_url    !== undefined && { image_url }),
+    });
+
+    // Return DTO consistent with getMenuItemById
+    const itemData = {
+      id:           menuItem.id,
+      name:         menuItem.item_name,
+      description:  menuItem.description,
+      price:        menuItem.price,
+      is_available: menuItem.is_available,
+      category_id:  menuItem.category_id,
+      image_url:    menuItem.image_url,
+    };
+
+    return successResponse(res, itemData, 'Menu item updated successfully');
   } catch (error) {
     next(error);
   }

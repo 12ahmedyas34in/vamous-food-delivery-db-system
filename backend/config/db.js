@@ -1,6 +1,4 @@
 // backend/config/db.js
-//
-// Phase 1 — SSL now driven by DB_SSL env var instead of NODE_ENV check.
 // Set DB_SSL=true in your Aiven .env; leave unset or false for local dev.
 
 const { Sequelize } = require('sequelize');

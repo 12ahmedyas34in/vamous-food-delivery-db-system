@@ -116,6 +116,7 @@ exports.createOrder = async (req, res) => {
         status_name:   'PAID',
         actor_user_id: user_id,
         notes:         'Cash on delivery — payment collected at door',
+        updated_at:    new Date(Date.now() + 1000),
       }, { transaction: t });
     } else {
       await OrderStatusHistory.create({
@@ -123,6 +124,7 @@ exports.createOrder = async (req, res) => {
         status_name:   'PENDING_PAYMENT',
         actor_user_id: user_id,
         notes:         'Awaiting manual payment confirmation',
+        updated_at:    new Date(Date.now() + 1000),
       }, { transaction: t });
     }
 
@@ -158,9 +160,9 @@ exports.getUserOrders = async (req, res) => {
       const driverProfile = await Driver.findOne({ where: { user_id: req.user.id } });
       whereClause.driver_id = driverProfile ? driverProfile.id : null; 
     } else if (req.user.role === 'restaurant_owner') {
-      whereClause.restaurant_id = req.user.restaurant_id; 
+      const ownerRestaurant = await Restaurant.findOne({ where: { owner_id: req.user.id } });
+      whereClause.restaurant_id = ownerRestaurant ? ownerRestaurant.id : null;
     }
-
     const { count, rows } = await Order.findAndCountAll({
       where: whereClause,
       include: [{ model: Restaurant, attributes: ['name', 'address'] }],
@@ -187,9 +189,9 @@ exports.getOrderById = async (req, res) => {
       const driverProfile = await Driver.findOne({ where: { user_id: req.user.id } });
       whereClause.driver_id = driverProfile ? driverProfile.id : null; 
     } else if (req.user.role === 'restaurant_owner') {
-      whereClause.restaurant_id = req.user.restaurant_id; 
+      const ownerRestaurant = await Restaurant.findOne({ where: { owner_id: req.user.id } });
+      whereClause.restaurant_id = ownerRestaurant ? ownerRestaurant.id : null;
     }
-
     const order = await Order.findOne({
       where: whereClause,
       include:[

@@ -1,20 +1,4 @@
 // backend/models/index.js
-//
-// Phase 1 — Complete 16-table schema
-//
-// Tables added in Phase 1 (6 new):
-//   addresses, payment_methods, menu_categories,
-//   operating_hours, cuisine_types, restaurant_cuisines
-//
-// Tables carried forward from MVP (10 existing):
-//   users, drivers, restaurants, menu_items, orders,
-//   order_items, order_status_history, payments, reviews, cart_items
-//
-// ENUM update: Order.status and OrderStatusHistory.status_name
-//   now include PENDING_PAYMENT and PAID states (SRS FR-STATE)
-//
-// Run after changes:
-//   node seed.js  (drops + recreates + seeds everything)
 
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
@@ -43,6 +27,8 @@ const User = sequelize.define('User', {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 2. DRIVERS (ISA specialization of users)
+// Added is_active (defaultValue: false) for pending-activation
+// pattern. New driver applications are created inactive until admin approves.
 // ══════════════════════════════════════════════════════════════════════════════
 const Driver = sequelize.define('Driver', {
   user_id: {
@@ -53,6 +39,7 @@ const Driver = sequelize.define('Driver', {
   vehicle_type:         { type: DataTypes.STRING(50),    allowNull: true },
   license_number:       { type: DataTypes.STRING(50),    allowNull: false },
   is_available:         { type: DataTypes.BOOLEAN,       defaultValue: true },
+  is_active:            { type: DataTypes.BOOLEAN,       defaultValue: false },
   current_lat:          { type: DataTypes.DECIMAL(10, 8), allowNull: true },
   current_lng:          { type: DataTypes.DECIMAL(11, 8), allowNull: true },
   last_location_update: { type: DataTypes.DATE,          allowNull: true },
@@ -62,14 +49,14 @@ const Driver = sequelize.define('Driver', {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 3. ADDRESSES ← NEW in Phase 1
+// 3. ADDRESSES
 // ══════════════════════════════════════════════════════════════════════════════
 const Address = sequelize.define('Address', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   user_id: {
     type:       DataTypes.INTEGER,
     allowNull:  false,
-    references: { model: 'users', key: 'id' },   // explicit DB-level FK
+    references: { model: 'users', key: 'id' },
   },
   street:      { type: DataTypes.STRING(255),    allowNull: false },
   city:        { type: DataTypes.STRING(100),    allowNull: false },
@@ -81,12 +68,12 @@ const Address = sequelize.define('Address', {
   tableName:  'addresses',
   timestamps: false,
   indexes: [
-    { fields: ['user_id'] },   // speeds up WHERE user_id = ? lookups
+    { fields: ['user_id'] },
   ],
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 4. CUISINE_TYPES ← NEW in Phase 1
+// 4. CUISINE_TYPES
 // ══════════════════════════════════════════════════════════════════════════════
 const CuisineType = sequelize.define('CuisineType', {
   id:        { type: DataTypes.INTEGER,    primaryKey: true, autoIncrement: true },
@@ -104,11 +91,11 @@ const Restaurant = sequelize.define('Restaurant', {
   owner_id: { type: DataTypes.INTEGER, allowNull: false },
   name:         { type: DataTypes.STRING(100), allowNull: false },
   description:  { type: DataTypes.TEXT,        allowNull: true },
-  image_url:    { type: DataTypes.STRING(255),  allowNull: true },  // Phase 2: Cloudinary
+  image_url:    { type: DataTypes.STRING(255),  allowNull: true },
   address:      { type: DataTypes.STRING(255),  allowNull: false },
   phone:        { type: DataTypes.STRING(20),   allowNull: false },
   delivery_fee: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
-  estimated_time: { type: DataTypes.INTEGER,    allowNull: true },  // minutes
+  estimated_time: { type: DataTypes.INTEGER,    allowNull: true },
   is_active:    { type: DataTypes.BOOLEAN,      defaultValue: true },
   deleted_at:   { type: DataTypes.DATE,         allowNull: true },
 }, {
@@ -119,7 +106,7 @@ const Restaurant = sequelize.define('Restaurant', {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 6. RESTAURANT_CUISINES (M:N junction) ← NEW in Phase 1
+// 6. RESTAURANT_CUISINES (M:N junction)
 // ══════════════════════════════════════════════════════════════════════════════
 const RestaurantCuisine = sequelize.define('RestaurantCuisine', {
   restaurant_id: {
@@ -138,7 +125,7 @@ const RestaurantCuisine = sequelize.define('RestaurantCuisine', {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 7. OPERATING_HOURS (weak entity — identified by restaurants) ← NEW Phase 1
+// 7. OPERATING_HOURS
 // ══════════════════════════════════════════════════════════════════════════════
 const OperatingHour = sequelize.define('OperatingHour', {
   restaurant_id: {
@@ -162,7 +149,7 @@ const OperatingHour = sequelize.define('OperatingHour', {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 8. MENU_CATEGORIES ← NEW in Phase 1
+// 8. MENU_CATEGORIES
 // ══════════════════════════════════════════════════════════════════════════════
 const MenuCategory = sequelize.define('MenuCategory', {
   id:            { type: DataTypes.INTEGER,   primaryKey: true, autoIncrement: true },
@@ -180,13 +167,13 @@ const MenuCategory = sequelize.define('MenuCategory', {
 const MenuItem = sequelize.define('MenuItem', {
   id:            { type: DataTypes.INTEGER,     primaryKey: true, autoIncrement: true },
   restaurant_id: { type: DataTypes.INTEGER,     allowNull: false },
-  category_id:   { type: DataTypes.INTEGER,     allowNull: false },  // NOT NULL per SRS 3NF design
+  category_id:   { type: DataTypes.INTEGER,     allowNull: false },
   item_name:     { type: DataTypes.STRING(100), allowNull: false },
   description:   { type: DataTypes.TEXT,        allowNull: true },
   price:         { type: DataTypes.DECIMAL(10, 2), allowNull: false },
   stock_quantity: { type: DataTypes.INTEGER,    defaultValue: 999 },
   is_available:  { type: DataTypes.BOOLEAN,     defaultValue: true },
-  image_url:     { type: DataTypes.STRING(255), allowNull: true },   // Phase 2: Cloudinary
+  image_url:     { type: DataTypes.STRING(255), allowNull: true },
   deleted_at:    { type: DataTypes.DATE,        allowNull: true },
 }, {
   tableName:  'menu_items',
@@ -194,7 +181,7 @@ const MenuItem = sequelize.define('MenuItem', {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 10. PAYMENT_METHODS ← NEW in Phase 1 (replaces free-text payment_method field)
+// 10. PAYMENT_METHODS
 // ══════════════════════════════════════════════════════════════════════════════
 const PaymentMethod = sequelize.define('PaymentMethod', {
   id:          { type: DataTypes.INTEGER,    primaryKey: true, autoIncrement: true },
@@ -205,31 +192,18 @@ const PaymentMethod = sequelize.define('PaymentMethod', {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 11. ORDERS (central fact table)
-//
-// ENUM updated for Phase 1:
-//   Added PENDING_PAYMENT and PAID states per SRS FR-STATE and Decision Q2.
-//   order_status now reflects the full lifecycle including payment confirmation.
+// 11. ORDERS
 // ══════════════════════════════════════════════════════════════════════════════
 const Order = sequelize.define('Order', {
   id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   user_id:       { type: DataTypes.INTEGER, allowNull: false },
   restaurant_id: { type: DataTypes.INTEGER, allowNull: false },
-  // Phase 1: address_id FK replaces the free-text delivery_address field
   address_id:    { type: DataTypes.INTEGER, allowNull: false },
   driver_id:     { type: DataTypes.INTEGER, allowNull: true },
-  // Phase 1: full lifecycle ENUM including payment states
   status: {
     type: DataTypes.ENUM(
-      'PENDING',           // order created, payment method selected
-      'PENDING_PAYMENT',   // awaiting manual bank transfer / Tele Birr confirmation
-      'PAID',              // payment confirmed (COD = automatic, transfer = admin confirms)
-      'CONFIRMED',         // restaurant acknowledged the order
-      'PREPARING',         // kitchen is preparing
-      'READY',             // ready for driver pickup
-      'OUT_FOR_DELIVERY',  // driver collected the order
-      'COMPLETED',         // delivered — enables review
-      'CANCELLED'          // cancelled from any non-terminal state
+      'PENDING', 'PENDING_PAYMENT', 'PAID', 'CONFIRMED',
+      'PREPARING', 'READY', 'OUT_FOR_DELIVERY', 'COMPLETED', 'CANCELLED'
     ),
     allowNull:    false,
     defaultValue: 'PENDING',
@@ -238,7 +212,6 @@ const Order = sequelize.define('Order', {
   tax:              { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
   delivery_fee:     { type: DataTypes.DECIMAL(10, 2), allowNull: false },
   discount_amount:  { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
-  // Materialized total — documented 3NF exception for read performance
   total_amount:     { type: DataTypes.DECIMAL(10, 2), allowNull: false },
   special_instructions: { type: DataTypes.TEXT, allowNull: true },
 }, {
@@ -249,7 +222,7 @@ const Order = sequelize.define('Order', {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 12. ORDER_ITEMS (weak entity — identified by orders)
+// 12. ORDER_ITEMS
 // ══════════════════════════════════════════════════════════════════════════════
 const OrderItem = sequelize.define('OrderItem', {
   order_id: {
@@ -259,11 +232,10 @@ const OrderItem = sequelize.define('OrderItem', {
   },
   line_no: {
     type:       DataTypes.INTEGER,
-    primaryKey: true,  // discriminator — unique within an order
+    primaryKey: true,
   },
   menu_item_id:         { type: DataTypes.INTEGER,      allowNull: false },
   quantity:             { type: DataTypes.INTEGER,      allowNull: false },
-  // Price snapshot at order creation — never changes even if menu price changes later
   unit_price:           { type: DataTypes.DECIMAL(10, 2), allowNull: false },
   special_instructions: { type: DataTypes.TEXT,         allowNull: true },
 }, {
@@ -272,9 +244,7 @@ const OrderItem = sequelize.define('OrderItem', {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 13. ORDER_STATUS_HISTORY (weak entity — identified by orders)
-//
-// ENUM updated: same values as Order.status to maintain consistency.
+// 13. ORDER_STATUS_HISTORY
 // ══════════════════════════════════════════════════════════════════════════════
 const OrderStatusHistory = sequelize.define('OrderStatusHistory', {
   order_id: {
@@ -284,7 +254,7 @@ const OrderStatusHistory = sequelize.define('OrderStatusHistory', {
   },
   updated_at: {
     type:         DataTypes.DATE,
-    primaryKey:   true,  // discriminator — timestamp of change
+    primaryKey:   true,
     defaultValue: DataTypes.NOW,
   },
   status_name: {
@@ -302,22 +272,19 @@ const OrderStatusHistory = sequelize.define('OrderStatusHistory', {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 14. PAYMENTS (1:1 with orders)
-//
-// Phase 1: payment_method_id now FK to payment_methods table.
-//   Replaces the old free-text payment_method STRING field.
+// 14. PAYMENTS
 // ══════════════════════════════════════════════════════════════════════════════
 const Payment = sequelize.define('Payment', {
   id:       { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   order_id: {
     type:      DataTypes.INTEGER,
     allowNull: false,
-    unique:    true,  // enforces 1:1 with orders
+    unique:    true,
   },
   payment_method_id: {
     type:       DataTypes.INTEGER,
     allowNull:  false,
-    references: { model: 'payment_methods', key: 'id' },  // explicit DB-level FK
+    references: { model: 'payment_methods', key: 'id' },
   },
   amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
   status: {
@@ -335,14 +302,14 @@ const Payment = sequelize.define('Payment', {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 15. REVIEWS (0..1 with orders — one review per order)
+// 15. REVIEWS
 // ══════════════════════════════════════════════════════════════════════════════
 const Review = sequelize.define('Review', {
   id:       { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   order_id: {
     type:      DataTypes.INTEGER,
     allowNull: false,
-    unique:    true,  // DB-level: one review per order
+    unique:    true,
   },
   rating: {
     type:      DataTypes.INTEGER,
@@ -358,7 +325,7 @@ const Review = sequelize.define('Review', {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 16. CART_ITEMS (enterprise upgrade — server-side cart)
+// 16. CART_ITEMS
 // ══════════════════════════════════════════════════════════════════════════════
 const CartItem = sequelize.define('CartItem', {
   id:           { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -371,14 +338,12 @@ const CartItem = sequelize.define('CartItem', {
   createdAt:  'created_at',
   updatedAt:  'updated_at',
   indexes: [
-    // Composite unique index — prevents duplicate cart rows for same item
     { unique: true, fields: ['user_id', 'menu_item_id'] },
   ],
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ASSOCIATIONS
-// Follows the 7 reduction rules from the Phase 1 DB Architecture document.
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── users ─────────────────────────────────────────────────────────────────────

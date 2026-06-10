@@ -1,7 +1,7 @@
 // backend/utils/response.js
 
 // ─── SCOPE NOTICE ──────────────────────────────────────────────────────────────
-// Use ONLY for new endpoints (Phase 1+).
+// Use ONLY for new endpoints.
 // Existing controllers return different response shapes — do not use these
 // helpers on them yet or you will break the frontend.
 /**

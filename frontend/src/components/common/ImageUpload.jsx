@@ -1,4 +1,4 @@
-// frontend/src/components/ImageUpload.jsx
+// frontend/src/components/common/ImageUpload.jsx
 //
 // Reusable image upload component.
 // Sends multipart/form-data to your Express backend — NOT directly to Cloudinary.
@@ -13,7 +13,7 @@
 //   aspectHint   — optional hint e.g. "Recommended: 16:9, min 800px wide"
 
 import React, { useState, useRef } from 'react';
-import axios from '../api/axios';
+import axios from '../../api/axios';
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_SIZE_BYTES = 5 * 1024 * 1024; // must match backend limit

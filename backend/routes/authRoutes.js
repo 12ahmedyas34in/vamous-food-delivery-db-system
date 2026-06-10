@@ -1,15 +1,15 @@
-const express = require('express');
-const router = express.Router();
+// backend/routes/authRoutes.js
+//
+// Phase 3 Push 4: added POST /logout
+
+const express        = require('express');
+const router         = express.Router();
 const authController = require('../controllers/authController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect }    = require('../middleware/authMiddleware');
 
-// Route: POST /api/auth/register
 router.post('/register', authController.register);
-
-// Route: POST /api/auth/login
-router.post('/login', authController.login);
-
-// Route: GET /api/auth/me (Protected route!)
-router.get('/me', protect, authController.getMe);
+router.post('/login',    authController.login);
+router.post('/logout',   authController.logout);      // Phase 3 Push 4
+router.get('/me',  protect, authController.getMe);
 
 module.exports = router;
