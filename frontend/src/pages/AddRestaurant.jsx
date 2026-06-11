@@ -155,7 +155,7 @@ const AddRestaurant = () => {
                     {[
                       { name: 'name',            label: 'Your full name',     type: 'text',  placeholder: 'Maria Conti',         required: true  },
                       { name: 'email',           label: 'Email address',      type: 'email', placeholder: 'maria@restaurant.com', required: true  },
-                      { name: 'phone',           label: 'Phone number',       type: 'tel',   placeholder: '+1 (555) 000-0000',   required: false },
+                      { name: 'phone',           label: 'Phone number',       type: 'tel',   placeholder: '+251900000000',   required: false },
                       { name: 'restaurant_name', label: 'Restaurant name',    type: 'text',  placeholder: 'Trattoria del Centro', required: true  },
                       { name: 'address',         label: 'Restaurant address', type: 'text',  placeholder: '123 Main St, City',   required: false },
                     ].map((field) => (

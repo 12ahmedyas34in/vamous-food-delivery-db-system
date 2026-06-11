@@ -143,9 +143,9 @@ const SignUpToDeliver = () => {
                       </p>
                     )}
                     {[
-                      { name: 'name',  label: 'Full name',    type: 'text',  placeholder: 'Alex Rivera',         required: true  },
-                      { name: 'email', label: 'Email',        type: 'email', placeholder: 'alex@university.edu', required: true  },
-                      { name: 'phone', label: 'Phone number', type: 'tel',   placeholder: '+1 (555) 000-0000',   required: false },
+                      { name: 'name',  label: 'Full name',    type: 'text',  placeholder: 'Alex Test',         required: true  },
+                      { name: 'email', label: 'Email',        type: 'email', placeholder: 'alextest@gmail.com', required: true  },
+                      { name: 'phone', label: 'Phone number', type: 'tel',   placeholder: '+251900000000',   required: false },
                     ].map((field) => (
                       <div key={field.name}>
                         <label className="block text-sm font-medium text-gray-700 mb-1.5">
