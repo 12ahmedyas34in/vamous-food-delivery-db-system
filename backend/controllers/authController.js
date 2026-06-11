@@ -22,8 +22,8 @@ const signToken = (user) => {
 // Cookie options — reused for both set and clear
 const cookieOptions = () => ({
   httpOnly: true,
-  secure:   process.env.NODE_ENV === 'production', // HTTPS only in prod
-  sameSite: 'lax',
+  secure:   true,                // always HTTPS — both Vercel and Render use HTTPS
+  sameSite: 'none',              // required for cross-site cookie (vercel.app → onrender.com)
   maxAge:   30 * 24 * 60 * 60 * 1000, // 30 days in ms
 });
 
@@ -140,8 +140,8 @@ exports.login = async (req, res) => {
 exports.logout = (req, res) => {
   res.clearCookie('token', {
     httpOnly: true,
-    secure:   process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure:   true,
+    sameSite: 'none',
   });
   return res.status(200).json({ status: 'success', message: 'Logged out successfully.' });
 };

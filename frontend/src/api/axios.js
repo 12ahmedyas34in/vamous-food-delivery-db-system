@@ -1,6 +1,5 @@
 // frontend/src/api/axios.js
 //
-// Phase 3 Push 4 changes:
 //   - withCredentials: true — sends httpOnly cookie on every request
 //   - Authorization header interceptor removed — token is now in the cookie
 //   - 401 response interceptor kept — still handles session expiry
@@ -9,7 +8,7 @@ import axios from 'axios';
 
 const instance = axios.create({
   baseURL:         process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
-  withCredentials: true,   // Phase 3 Push 4 — send cookie on every request
+  withCredentials: true,   // send cookie on every request
 });
 
 // Request interceptor — no longer attaches token (cookie handles it)
