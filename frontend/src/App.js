@@ -26,14 +26,16 @@ import Register from './pages/auth/Register';
 import Cart              from './pages/orders/Cart';
 import MyOrders          from './pages/orders/MyOrders';
 import OrderConfirmation from './pages/orders/OrderConfirmation';
+import OrderTimeline     from './pages/orders/OrderTimeline';
 
 // ── Restaurant Pages ──
 import RestaurantList from './pages/restaurants/RestaurantList';
 import Menu           from './pages/restaurants/Menu';
 
 // ── Dashboard Pages ──
-import AdminDashboard from './pages/admin/AdminDashboard';
-import OwnerDashboard from './pages/owner/OwnerDashboard';
+import AdminDashboard    from './pages/admin/AdminDashboard';
+import OwnerDashboard    from './pages/owner/OwnerDashboard';
+import AnalyticsDashboard from './pages/analytics/AnalyticsDashboard';
 
 function App() {
   return (
@@ -59,6 +61,7 @@ function App() {
           <Route path="/addresses"            element={<AddressBook />} />
           <Route path="/orders"               element={<MyOrders />} />
           <Route path="/orders/:id"           element={<OrderConfirmation />} />
+          <Route path="/orders/:id/timeline" element={<OrderTimeline />} />
         </Route>
 
         {/* ── Admin only ── */}
@@ -77,6 +80,16 @@ function App() {
           element={
             <RestrictedRoute allowedRoles={['restaurant_owner']}>
               <OwnerDashboard />
+            </RestrictedRoute>
+          }
+        />
+
+        {/* ── Analytics (owner only) ── */}
+        <Route
+          path="/analytics"
+          element={
+            <RestrictedRoute allowedRoles={['restaurant_owner']}>
+              <AnalyticsDashboard />
             </RestrictedRoute>
           }
         />
