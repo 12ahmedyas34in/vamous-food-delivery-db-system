@@ -115,13 +115,14 @@ exports.getDriverReport = async (req, res) => {
     const driver = await Driver.findOne({ where: { user_id: req.user.id } });
     if (!driver) return res.status(404).json({ status: 'fail', message: 'Driver profile not found' });
 
-    const completedOrders = await Order.findAll({ where: { driver_id: driver.user_id || driver.id, status: 'COMPLETED' }, include: [{ model: OrderStatusHistory }], order: [['created_at', 'DESC']] });
+    const completedOrders = await Order.findAll({ where: { driver_id: driver.user_id || driver.id, status: 'COMPLETED' }, include: [{ model: OrderStatusHistory }, { model: Restaurant }], order: [['created_at', 'DESC']] });
 
     const totalDeliveries = completedOrders.length;
 
-    // Compute average delivery minutes by looking for OUT_FOR_DELIVERY -> COMPLETED timestamps in history
+    // Compute average delivery minutes and total fees
     let totalMinutes = 0;
     let counted = 0;
+    let totalFees = 0;
     const deliveries = [];
     for (const ord of completedOrders) {
       const histories = ord.OrderStatusHistories || ord.OrderStatusHistory || await OrderStatusHistory.findAll({ where: { order_id: ord.id } });
@@ -132,15 +133,22 @@ exports.getDriverReport = async (req, res) => {
         totalMinutes += mins;
         counted++;
       }
-      deliveries.push({ order_id: ord.id, completed_at: ord.created_at });
+      totalFees += parseFloat(ord.delivery_fee || 0);
+      deliveries.push({ 
+        order_id: ord.id, 
+        restaurant_name: ord.Restaurant?.name || 'Unknown', 
+        total_amount: parseFloat(ord.total_amount || 0),
+        created_at: ord.created_at 
+      });
     }
 
     const avgDeliveryMinutes = counted > 0 ? Number((totalMinutes / counted).toFixed(2)) : null;
+    const totalFeesEarned = Number(totalFees.toFixed(2));
 
     // Last 5 deliveries
     const lastFive = deliveries.slice(0, 5);
 
-    res.status(200).json({ status: 'success', data: { totalDeliveries, avgDeliveryMinutes, lastFive } });
+    res.status(200).json({ status: 'success', data: { totalDeliveries, avgDeliveryMinutes, totalFeesEarned, lastFive } });
   } catch (error) {
     res.status(500).json({ status: 'fail', message: error.message });
   }

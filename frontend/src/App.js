@@ -35,6 +35,7 @@ import Menu           from './pages/restaurants/Menu';
 // ── Dashboard Pages ──
 import AdminDashboard    from './pages/admin/AdminDashboard';
 import OwnerDashboard    from './pages/owner/OwnerDashboard';
+import DriverDashboard   from './pages/driver/DriverDashboard';
 import AnalyticsDashboard from './pages/analytics/AnalyticsDashboard';
 
 function App() {
@@ -62,6 +63,7 @@ function App() {
           <Route path="/orders"               element={<MyOrders />} />
           <Route path="/orders/:id"           element={<OrderConfirmation />} />
           <Route path="/orders/:id/timeline" element={<OrderTimeline />} />
+          <Route path="/driver/dashboard"    element={<DriverDashboard />} />
         </Route>
 
         {/* ── Admin only ── */}
